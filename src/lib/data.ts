@@ -262,7 +262,14 @@ export const TREND_BANDS: TrendBand[] = [
 export function getTrendBand(vals: number[]): TrendBand {
   const nz = vals.filter(v => v > 0)
   if (nz.length < 2) return TREND_BANDS[2]
-  const pct = (nz[nz.length - 1] - nz[0]) / nz[0] * 100
+  
+  const latest = nz[nz.length - 1]
+  const previous = nz.slice(0, -1)
+  const avgPrevious = previous.reduce((s, v) => s + v, 0) / previous.length
+  
+  if (avgPrevious === 0) return TREND_BANDS[2]
+  const pct = (latest - avgPrevious) / avgPrevious * 100
+  
   return TREND_BANDS.find(b => pct >= b.min && pct < b.max) ?? TREND_BANDS[4]
 }
 
