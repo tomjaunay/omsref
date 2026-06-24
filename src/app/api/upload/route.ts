@@ -27,13 +27,10 @@ export async function POST(req: NextRequest) {
     const totalRefs = rows.reduce((s, r) => s + r.referrals, 0)
     const totalIncome = rows.reduce((s, r) => s + r.income, 0)
 
-    return NextResponse.json({
-      ok: true,
-      period,
-      referrers: rows.length,
-      referrals: totalRefs,
-      income: totalIncome,
-    })
+    return NextResponse.json(
+  { ok: true, period, referrers: rows.length, referrals: totalRefs, income: totalIncome },
+  { headers: { 'Cache-Control': 'no-store' } }
+)
   } catch (err) {
     console.error('POST /api/upload error:', err)
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 })

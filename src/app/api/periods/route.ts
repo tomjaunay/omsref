@@ -8,14 +8,8 @@ export async function GET() {
       .from('referrer_rows')
       .select('period, referrer, practice, specialty, suburb, referrals, income')
 
-    if (error) {
-      console.error('Supabase query error:', error)
-      throw error
-    }
+    if (error) throw error
 
-    console.log(`Fetched ${rows?.length ?? 0} rows from referrer_rows`)
-
-    // Group by period
     const db: Record<string, typeof rows> = {}
     for (const row of rows ?? []) {
       if (!db[row.period]) db[row.period] = []
@@ -23,9 +17,11 @@ export async function GET() {
     }
 
     const periods = sortPeriods(Object.keys(db))
-    console.log('Periods found:', periods)
 
-    return NextResponse.json({ db, periods })
+    return NextResponse.json(
+      { db, periods },
+      { headers: { 'Cache-Control': 'no-store' } }
+    )
   } catch (err) {
     console.error('GET /api/periods error:', err)
     return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 })
