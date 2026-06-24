@@ -21,12 +21,13 @@ const SUGGESTIONS = [
 ]
 
 function simpleMarkdown(text: string): string {
-  return text
+  // Convert list items first, then wrap consecutive <li> blocks
+  const withLi = text.replace(/^- (.+)$/gm, '<li>$1</li>')
+  const withUl = withLi.replace(/((<li>[^]*?<\/li>\n?)+)/g, '<ul>$1</ul>')
+  return withUl
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/^#{1,3} (.+)$/gm, '<strong>$1</strong>')
-    .replace(/^- (.+)$/gm, '<li>$1</li>')
-    .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
     .replace(/\n\n/g, '</p><p>')
     .replace(/^(.)/, '<p>$1')
     .replace(/(.)$/, '$1</p>')
