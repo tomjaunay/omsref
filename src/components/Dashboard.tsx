@@ -241,13 +241,7 @@ export default function Dashboard() {
       const data = await res.json()
       setDb(data.db ?? {})
       setAllPeriods(data.periods ?? [])
-      setSelected(prev => {
-        // Keep existing selection, adding any new periods
-        const newPeriods: string[] = data.periods ?? []
-        if (prev.length === 0) return newPeriods
-        const merged = [...new Set([...prev, ...newPeriods])]
-        return sortPeriods(merged.filter((p: string) => newPeriods.includes(p)))
-      })
+      setSelected(data.periods ?? [])
     } catch (e) {
       console.error('Failed to fetch data:', e)
     }
