@@ -21,9 +21,15 @@ export default function ChangePill({ vals }: ChangePillProps) {
       </span>
     )
   }
-  const pct = Math.round(((nz[nz.length - 1] - nz[0]) / nz[0]) * 100)
+
+  const latest = nz[nz.length - 1]
+  const previous = nz.slice(0, -1)
+  const avgPrevious = previous.reduce((s, v) => s + v, 0) / previous.length
+  const pct = avgPrevious > 0 ? Math.round((latest - avgPrevious) / avgPrevious * 100) : 0
+
   const band = getTrendBand(vals)
   const style = PILL_STYLES[band.pillClass] ?? PILL_STYLES['pill-flat']
+
   return (
     <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 8, fontWeight: 500, whiteSpace: 'nowrap', ...style }}>
       {pct > 0 ? '+' : ''}{pct}%
