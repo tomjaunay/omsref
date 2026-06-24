@@ -175,11 +175,15 @@ function ManageTab({
   periods: string[]
   onDeleted: () => void
 }) {
-  async function del(p: string) {
-    if (!confirm(`Delete ${p}? This cannot be undone.`)) return
-    await fetch(`/api/periods/${p}`, { method: 'DELETE' })
-    onDeleted()
-  }
+async function del(p: string) {
+  if (!confirm(`Delete ${p}? This cannot be undone.`)) return
+  await fetch('/api/delete-period', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ period: p }),
+  })
+  onDeleted()
+}
 
   return (
     <div style={{ maxWidth: 560 }}>
@@ -235,18 +239,21 @@ export default function Dashboard() {
   const [pracSearch, setPracSearch] = useState('')
   const [dentSearch, setDentSearch] = useState('')
 
-  const fetchData = useCallback(async () => {
-    try {
-      const res = await fetch('/api/periods', { cache: 'no-store' })
-      const data = await res.json()
-      setDb(data.db ?? {})
-      setAllPeriods(data.periods ?? [])
-      setSelected(data.periods ?? [])
-    } catch (e) {
-      console.error('Failed to fetch data:', e)
-    }
-    setLoading(false)
-  }, [])
+const fetchData = useCallback(async () => {
+  try {
+    const res = await fetch('/api/periods', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const data = await res.json()
+    setDb(data.db ?? {})
+    setAllPeriods(data.periods ?? [])
+    setSelected(data.periods ?? [])
+  } catch (e) {
+    console.error('Failed to fetch data:', e)
+  }
+  setLoading(false)
+}, [])
 
   useEffect(() => { fetchData() }, [fetchData])
 
