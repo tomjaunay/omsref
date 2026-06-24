@@ -237,7 +237,7 @@ export default function Dashboard() {
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch('/api/periods')
+      const res = await fetch('/api/periods', { cache: 'no-store' })
       const data = await res.json()
       setDb(data.db ?? {})
       setAllPeriods(data.periods ?? [])
