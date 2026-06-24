@@ -189,7 +189,7 @@ export function buildDentistTable(
   return applySortDir(rows, sortKey, sortDir, 'referrer')
 }
 
-function applySortDir<T extends Record<string, unknown>>(
+function applySortDir<T extends object>(
   rows: T[],
   key: string,
   dir: SortDir,
@@ -197,13 +197,16 @@ function applySortDir<T extends Record<string, unknown>>(
 ): T[] {
   const mul = dir === 'desc' ? -1 : 1
   return [...rows].sort((a, b) => {
-    const av = a[key], bv = b[key]
+    const av = (a as Record<string, unknown>)[key]
+    const bv = (b as Record<string, unknown>)[key]
     if (typeof av === 'string' && typeof bv === 'string') {
-      return mul * av.localeCompare(bv as string)
+      return mul * av.localeCompare(bv)
     }
     const diff = (Number(bv) - Number(av)) * mul
     if (diff !== 0) return diff
-    return String(a[nameKey]).localeCompare(String(b[nameKey]))
+    const an = (a as Record<string, unknown>)[nameKey]
+    const bn = (b as Record<string, unknown>)[nameKey]
+    return String(an).localeCompare(String(bn))
   })
 }
 
