@@ -7,12 +7,12 @@ export function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  const cookie = req.cookies.get('auth')
-  if (cookie?.value === PASSWORD) {
+  if (req.nextUrl.pathname === '/login') {
     return NextResponse.next()
   }
 
-  if (req.method === 'POST' && req.nextUrl.pathname === '/login') {
+  const cookie = req.cookies.get('auth')
+  if (cookie?.value === PASSWORD) {
     return NextResponse.next()
   }
 
@@ -22,5 +22,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!login|_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 }
