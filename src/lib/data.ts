@@ -272,25 +272,66 @@ export function buildClaudeContext(
   db: Record<string, RawRow[]>,
   periods: string[]
 ): string {
-  let txt = `You are an analyst assistant for an Oral & Maxillofacial Surgery (OMFS) specialist practice in Sydney, Australia. You have access to referral data across ${periods.length} quarters.\n\n`
-  txt += `AVAILABLE QUARTERS: ${periods.join(', ')}\n\nQUARTERLY SUMMARY:\n`
+  if (periods.length === 0) return 'No referral data available yet.'
+
+  let txt = `You are an analyst assistant for an Oral & Maxillofacial Surgery (OMFS) specialist practice in Sydney, Australia run by Dr Thomas Jaunay. You have been provided the COMPLETE referral dataset below — do not invent or estimate any figures, only use the data provided.\n\n`
+  txt += `AVAILABLE QUARTERS: ${periods.join(', ')}\n\n`
+  txt += `QUARTERLY SUMMARY:\n`
+
   for (const p of periods) {
     const rows = db[p] ?? []
     const refs = rows.reduce((s, r) => s + r.referrals, 0)
     const inc = rows.reduce((s, r) => s + r.income, 0)
     txt += `${p}: ${refs} referrals, $${Math.round(inc).toLocaleString()} income, avg $${complexity(refs, inc)}/ref, ${rows.length} active referrers\n`
   }
-  txt += `\nTOP REFERRERS:\n`
-  const dents = buildDentistTable(db, periods, 'totalRefs', 'desc').slice(0, 20)
-  for (const d of dents) {
-    const qvals = periods.map(p => d.pd[p]?.refs ?? 0)
-    txt += `${d.referrer} (${d.practice}): ${d.totalRefs} refs, $${Math.round(d.totalIncome).toLocaleString()} income, avg $${d.totalComplex}/ref — by qtr: ${qvals.join(', ')}\n`
+
+  // Build complete dentist totals across all periods
+  const dentMap: Record<string, { practice: string; specialty: string; totalRefs: number; totalIncome: number; byPeriod: Record<string, number> }> = {}
+
+  for (const p of periods) {
+    for (const r of db[p] ?? []) {
+      if (!r.referrals) continue
+      const key = `${r.referrer}||${r.practice}`
+      if (!dentMap[key]) {
+        dentMap[key] = { practice: r.practice, specialty: r.specialty, totalRefs: 0, totalIncome: 0, byPeriod: {} }
+      }
+      dentMap[key].totalRefs += r.referrals
+      dentMap[key].totalIncome += r.income
+      dentMap[key].byPeriod[p] = (dentMap[key].byPeriod[p] ?? 0) + r.referrals
+    }
   }
-  txt += `\nTOP PRACTICES:\n`
-  const pracs = buildPracticeTable(db, periods, 'totalRefs', 'desc').slice(0, 15)
-  for (const p of pracs) {
-    const qvals = periods.map(period => p.pd[period]?.refs ?? 0)
-    txt += `${p.practice}: ${p.totalRefs} refs, $${Math.round(p.totalIncome).toLocaleString()} income, avg $${p.totalComplex}/ref — by qtr: ${qvals.join(', ')}\n`
+
+  const allDents = Object.entries(dentMap)
+    .map(([key, d]) => ({ referrer: key.split('||')[0], ...d }))
+    .sort((a, b) => b.totalRefs - a.totalRefs)
+
+  txt += `\nCOMPLETE REFERRER LIST (${allDents.length} referrers, sorted by total referrals):\n`
+  for (const d of allDents) {
+    const byQ = periods.map(p => `${p}:${d.byPeriod[p] ?? 0}`).join(' ')
+    txt += `${d.referrer} (${d.practice}): ${d.totalRefs} refs, $${Math.round(d.totalIncome).toLocaleString()} income, avg $${complexity(d.totalRefs, d.totalIncome)}/ref | ${byQ}\n`
   }
+
+  // Practice totals
+  const pracMap: Record<string, { totalRefs: number; totalIncome: number }> = {}
+  for (const p of periods) {
+    for (const r of db[p] ?? []) {
+      if (!r.referrals) continue
+      if (!pracMap[r.practice]) pracMap[r.practice] = { totalRefs: 0, totalIncome: 0 }
+      pracMap[r.practice].totalRefs += r.referrals
+      pracMap[r.practice].totalIncome += r.income
+    }
+  }
+
+  const allPracs = Object.entries(pracMap)
+    .map(([practice, d]) => ({ practice, ...d }))
+    .sort((a, b) => b.totalRefs - a.totalRefs)
+
+  txt += `\nCOMPLETE PRACTICE LIST (${allPracs.length} practices):\n`
+  for (const p of allPracs) {
+    txt += `${p.practice}: ${p.totalRefs} refs, $${Math.round(p.totalIncome).toLocaleString()} income, avg $${complexity(p.totalRefs, p.totalIncome)}/ref\n`
+  }
+
+  txt += `\nIMPORTANT: Only answer using the data above. Never invent referrer names or figures not present in this dataset.`
+
   return txt
 }
