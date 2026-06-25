@@ -22,6 +22,31 @@ const CV_LABELS = {
   insufficient: '—',
 }
 
+const SIGNAL_STYLES = {
+  significant:  { background: '#1a6b3c', color: '#ffffff' },
+  possible:     { background: '#e8f5ee', color: '#145530' },
+  noise:        { background: '#f0f0f0', color: '#7a7870' },
+}
+
+function getSignal(deviationPct: number, cv: number): {
+  label: string
+  style: React.CSSProperties
+  ratio: number
+  direction: string
+} {
+  const absDev = Math.abs(deviationPct)
+  const ratio = cv > 0 ? Math.round((absDev / cv) * 10) / 10 : 0
+  const direction = deviationPct >= 0 ? '↑' : '↓'
+
+  if (ratio >= 1.5) {
+    return { label: `${direction} significant`, style: SIGNAL_STYLES.significant, ratio, direction }
+  } else if (ratio >= 0.75) {
+    return { label: `${direction} possible`, style: SIGNAL_STYLES.possible, ratio, direction }
+  } else {
+    return { label: '~ within noise', style: SIGNAL_STYLES.noise, ratio, direction }
+  }
+}
+
 const PILL_BASE: React.CSSProperties = {
   fontSize: 10,
   padding: '1px 7px',
@@ -56,18 +81,28 @@ export default function ChangePill({ vals }: ChangePillProps) {
   else                 deviationStyle = DEVIATION_STYLES['pill-dn2']
 
   const sign = pct > 0 ? '+' : ''
+  const signal = getSignal(pct, stats.cv)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 150 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 160 }}>
+      {/* Signal strength — most important, shown first */}
+      <span
+        style={{ ...PILL_BASE, ...signal.style, fontWeight: 600 }}
+        title={`Signal ratio: ${signal.ratio}× (deviation ÷ CV). >1.5× = significant, 0.75–1.5× = possible, <0.75× = within normal noise`}
+      >
+        {signal.label}
+      </span>
+      {/* Deviation from median */}
       <span
         style={{ ...PILL_BASE, ...deviationStyle }}
         title={`Latest: ${stats.latest} · Median of previous qtrs: ${stats.median}`}
       >
         {sign}{pct}% vs median
       </span>
+      {/* CV volatility */}
       <span
         style={{ ...PILL_BASE, ...CV_STYLES[stats.cvLabel] }}
-        title={`Coefficient of variation: ${stats.cv}% — measures consistency across all active quarters`}
+        title={`Coefficient of variation: ${stats.cv}% across all active quarters`}
       >
         {CV_LABELS[stats.cvLabel]} (CV {stats.cv}%)
       </span>
