@@ -24,6 +24,7 @@ export interface PracticeRow {
   latestRefs: number
   latestIncome: number
   latestComplex: number
+  signalRatio: number
 }
 
 export interface DentistRow {
@@ -38,6 +39,7 @@ export interface DentistRow {
   latestIncome: number
   latestComplex: number
   quartersActive: number
+  signalRatio: number
 }
 
 export type Metric = 'refs' | 'income' | 'complexity'
@@ -58,6 +60,7 @@ export const PRAC_SORTS: SortOption[] = [
   { val: 'latestRefs',    label: 'Latest quarter — referrals' },
   { val: 'latestIncome',  label: 'Latest quarter — income' },
   { val: 'latestComplex', label: 'Latest quarter — complexity' },
+  { val: 'signalRatio',   label: 'Signal strength' },
   { val: 'practice',      label: 'Practice name A–Z' },
 ]
 
@@ -69,6 +72,7 @@ export const DENT_SORTS: SortOption[] = [
   { val: 'latestIncome',  label: 'Latest quarter — income' },
   { val: 'latestComplex', label: 'Latest quarter — complexity' },
   { val: 'quartersActive', label: 'Consistency (quarters active)' },
+  { val: 'signalRatio',   label: 'Signal strength' },
   { val: 'referrer',      label: 'Dentist name A–Z' },
 ]
 
@@ -90,11 +94,7 @@ export function sortPeriods(arr: string[]): string[] {
   })
 }
 
-export function metricVal(
-  metric: Metric,
-  refs: number,
-  inc: number
-): number {
+export function metricVal(metric: Metric, refs: number, inc: number): number {
   if (metric === 'refs') return refs
   if (metric === 'income') return inc
   return complexity(refs, inc)
@@ -111,6 +111,93 @@ export function metricLabel(metric: Metric): string {
   if (metric === 'refs') return 'Referrals'
   if (metric === 'income') return 'Income'
   return '$/ref'
+}
+
+// ── Statistical helpers ───────────────────────────────────────────────────────
+
+export interface TrendStats {
+  latestVsMedian: number
+  cv: number
+  cvLabel: 'stable' | 'variable' | 'erratic' | 'insufficient'
+  hasEnoughData: boolean
+  median: number
+  latest: number
+  signalRatio: number
+}
+
+function median(vals: number[]): number {
+  if (vals.length === 0) return 0
+  const sorted = [...vals].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 !== 0
+    ? sorted[mid]
+    : (sorted[mid - 1] + sorted[mid]) / 2
+}
+
+function stddev(vals: number[], mean: number): number {
+  if (vals.length < 2) return 0
+  const variance = vals.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / vals.length
+  return Math.sqrt(variance)
+}
+
+export function calcTrendStats(vals: number[]): TrendStats {
+  const active = vals.filter(v => v > 0)
+
+  if (active.length < 4) {
+    return {
+      latestVsMedian: 0, cv: 0,
+      cvLabel: 'insufficient', hasEnoughData: false,
+      median: 0, latest: active[active.length - 1] ?? 0,
+      signalRatio: 0,
+    }
+  }
+
+  const latest = active[active.length - 1]
+  const previous = active.slice(0, -1)
+  const med = median(previous)
+  const latestVsMedian = med > 0 ? ((latest - med) / med) * 100 : 0
+
+  const mean = active.reduce((s, v) => s + v, 0) / active.length
+  const cv = mean > 0 ? (stddev(active, mean) / mean) * 100 : 0
+  const cvLabel: TrendStats['cvLabel'] =
+    cv < 30 ? 'stable' : cv < 50 ? 'variable' : 'erratic'
+
+  const signalRatio = cv > 0
+    ? Math.round((Math.abs(latestVsMedian) / cv) * 100) / 100
+    : 0
+
+  return {
+    latestVsMedian: Math.round(latestVsMedian),
+    cv: Math.round(cv),
+    cvLabel,
+    hasEnoughData: true,
+    median: Math.round(med * 10) / 10,
+    latest,
+    signalRatio,
+  }
+}
+
+// ── Trend bands ───────────────────────────────────────────────────────────────
+
+export interface TrendBand {
+  min: number; max: number
+  stroke: string; pillClass: string; label: string; swatch: string
+}
+
+export const TREND_BANDS: TrendBand[] = [
+  { min: 20,        max: Infinity, stroke: '#1a7a35', pillClass: 'pill-up2',  label: 'Strong up',   swatch: '#1a7a35' },
+  { min: 5,         max: 20,       stroke: '#6aaa6a', pillClass: 'pill-up1',  label: 'Mild up',     swatch: '#6aaa6a' },
+  { min: -5,        max: 5,        stroke: '#c89a00', pillClass: 'pill-flat', label: 'Flat',        swatch: '#c89a00' },
+  { min: -20,       max: -5,       stroke: '#d4732a', pillClass: 'pill-dn1',  label: 'Mild down',   swatch: '#d4732a' },
+  { min: -Infinity, max: -20,      stroke: '#b33030', pillClass: 'pill-dn2',  label: 'Strong down', swatch: '#b33030' },
+]
+
+export function getTrendBand(vals: number[]): TrendBand {
+  const active = vals.filter(v => v > 0)
+  if (active.length < 4) return TREND_BANDS[2]
+  const stats = calcTrendStats(vals)
+  const pct = stats.latestVsMedian
+  return TREND_BANDS.find(b => pct >= b.min && pct < b.max) ?? TREND_BANDS[4]
 }
 
 // ── Aggregation ───────────────────────────────────────────────────────────────
@@ -137,11 +224,14 @@ export function buildPracticeTable(
     for (const p of periods) { tr += pd[p]?.refs ?? 0; ti += pd[p]?.inc ?? 0 }
     const lr = pd[lp]?.refs ?? 0
     const li = pd[lp]?.inc ?? 0
+    const refVals = periods.map(p => pd[p]?.refs ?? 0)
+    const stats = calcTrendStats(refVals)
     return {
       practice, pd,
       totalRefs: tr, totalIncome: Math.round(ti * 100) / 100,
       totalComplex: complexity(tr, ti),
       latestRefs: lr, latestIncome: li, latestComplex: complexity(lr, li),
+      signalRatio: stats.signalRatio,
     }
   })
   return applySortDir(rows, sortKey, sortDir, 'practice')
@@ -161,7 +251,8 @@ export function buildDentistTable(
       if (!m[key]) m[key] = {
         referrer: r.referrer, practice: r.practice, specialty: r.specialty,
         pd: {}, totalRefs: 0, totalIncome: 0, totalComplex: 0,
-        latestRefs: 0, latestIncome: 0, latestComplex: 0, quartersActive: 0,
+        latestRefs: 0, latestIncome: 0, latestComplex: 0,
+        quartersActive: 0, signalRatio: 0,
       }
       if (!m[key].pd[p]) m[key].pd[p] = { refs: 0, inc: 0 }
       m[key].pd[p].refs += r.referrals
@@ -178,12 +269,15 @@ export function buildDentistTable(
     }
     const lr = d.pd[lp]?.refs ?? 0
     const li = d.pd[lp]?.inc ?? 0
+    const refVals = periods.map(p => d.pd[p]?.refs ?? 0)
+    const stats = calcTrendStats(refVals)
     return {
       ...d,
       totalRefs: tr, totalIncome: Math.round(ti * 100) / 100,
       totalComplex: complexity(tr, ti),
       latestRefs: lr, latestIncome: li, latestComplex: complexity(lr, li),
       quartersActive: qa,
+      signalRatio: stats.signalRatio,
     }
   })
   return applySortDir(rows, sortKey, sortDir, 'referrer')
@@ -210,120 +304,6 @@ function applySortDir<T extends object>(
   })
 }
 
-// ── CSV parser ────────────────────────────────────────────────────────────────
-
-export function parseGentuCSV(text: string): Omit<RawRow, 'period'>[] | null {
-  const lines = text.trim().split(/\r?\n/)
-  if (lines.length < 2) return null
-  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
-  const rows: Omit<RawRow, 'period'>[] = []
-  for (let i = 1; i < lines.length; i++) {
-    const cells: string[] = []
-    let cur = '', inQ = false
-    for (const ch of lines[i]) {
-      if (ch === '"') inQ = !inQ
-      else if (ch === ',' && !inQ) { cells.push(cur.trim()); cur = '' }
-      else cur += ch
-    }
-    cells.push(cur.trim())
-    const obj: Record<string, string> = {}
-    headers.forEach((h, idx) => (obj[h] = cells[idx] ?? ''))
-    if (!obj['Referrer'] || !obj['Referrals']) continue
-    const income = parseFloat((obj['Income Generated'] ?? '0').replace(/[$,]/g, '')) || 0
-    const referrals = parseInt(obj['Referrals']) || 0
-    if (!referrals) continue
-    rows.push({
-      referrer: obj['Referrer'].trim(),
-      practice: (obj['Practice'] ?? '').trim(),
-      specialty: (obj['Specialty'] ?? 'Unknown').trim() || 'Unknown',
-      suburb: (obj['Suburb'] ?? '').trim(),
-      referrals,
-      income: Math.round(income * 100) / 100,
-    })
-  }
-  return rows.length ? rows : null
-}
-
-// ── Statistical helpers ───────────────────────────────────────────────────────
-
-export interface TrendStats {
-  latestVsMedian: number      // % deviation of latest from median of previous quarters
-  cv: number                  // coefficient of variation across all active quarters (%)
-  cvLabel: 'stable' | 'variable' | 'erratic' | 'insufficient'
-  hasEnoughData: boolean      // requires >= 4 active quarters
-  median: number              // median of previous quarters
-  latest: number              // latest quarter value
-}
-
-function median(vals: number[]): number {
-  if (vals.length === 0) return 0
-  const sorted = [...vals].sort((a, b) => a - b)
-  const mid = Math.floor(sorted.length / 2)
-  return sorted.length % 2 !== 0
-    ? sorted[mid]
-    : (sorted[mid - 1] + sorted[mid]) / 2
-}
-
-function stddev(vals: number[], mean: number): number {
-  if (vals.length < 2) return 0
-  const variance = vals.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / vals.length
-  return Math.sqrt(variance)
-}
-
-export function calcTrendStats(vals: number[]): TrendStats {
-  const active = vals.filter(v => v > 0)
-
-  if (active.length < 4) {
-    return {
-      latestVsMedian: 0, cv: 0,
-      cvLabel: 'insufficient', hasEnoughData: false,
-      median: 0, latest: active[active.length - 1] ?? 0,
-    }
-  }
-
-  const latest = active[active.length - 1]
-  const previous = active.slice(0, -1)
-  const med = median(previous)
-  const latestVsMedian = med > 0 ? ((latest - med) / med) * 100 : 0
-
-  // CV across all active quarters
-  const mean = active.reduce((s, v) => s + v, 0) / active.length
-  const cv = mean > 0 ? (stddev(active, mean) / mean) * 100 : 0
-
-  const cvLabel: TrendStats['cvLabel'] =
-    cv < 30 ? 'stable' : cv < 50 ? 'variable' : 'erratic'
-
-  return {
-    latestVsMedian: Math.round(latestVsMedian),
-    cv: Math.round(cv),
-    cvLabel,
-    hasEnoughData: true,
-    median: Math.round(med * 10) / 10,
-    latest,
-  }
-}
-export interface TrendBand {
-  min: number; max: number
-  stroke: string; pillClass: string; label: string; swatch: string
-}
-
-export const TREND_BANDS: TrendBand[] = [
-  { min: 20,        max: Infinity, stroke: '#1a7a35', pillClass: 'pill-up2',  label: 'Strong up',   swatch: '#1a7a35' },
-  { min: 5,         max: 20,       stroke: '#6aaa6a', pillClass: 'pill-up1',  label: 'Mild up',     swatch: '#6aaa6a' },
-  { min: -5,        max: 5,        stroke: '#c89a00', pillClass: 'pill-flat', label: 'Flat',        swatch: '#c89a00' },
-  { min: -20,       max: -5,       stroke: '#d4732a', pillClass: 'pill-dn1',  label: 'Mild down',   swatch: '#d4732a' },
-  { min: -Infinity, max: -20,      stroke: '#b33030', pillClass: 'pill-dn2',  label: 'Strong down', swatch: '#b33030' },
-]
-export function getTrendBand(vals: number[]): TrendBand {
-  const active = vals.filter(v => v > 0)
-  if (active.length < 4) return TREND_BANDS[2]
-
-  const stats = calcTrendStats(vals)
-  const pct = stats.latestVsMedian
-
-  return TREND_BANDS.find(b => pct >= b.min && pct < b.max) ?? TREND_BANDS[4]
-}
-
 // ── Claude context builder ────────────────────────────────────────────────────
 
 export function buildClaudeContext(
@@ -333,8 +313,7 @@ export function buildClaudeContext(
   if (periods.length === 0) return 'No referral data available yet.'
 
   let txt = `You are an analyst assistant for an Oral & Maxillofacial Surgery (OMFS) specialist practice in Sydney, Australia run by Dr Thomas Jaunay. You have been provided the COMPLETE referral dataset below — do not invent or estimate any figures, only use the data provided.\n\n`
-  txt += `AVAILABLE QUARTERS: ${periods.join(', ')}\n\n`
-  txt += `QUARTERLY SUMMARY:\n`
+  txt += `AVAILABLE QUARTERS: ${periods.join(', ')}\n\nQUARTERLY SUMMARY:\n`
 
   for (const p of periods) {
     const rows = db[p] ?? []
@@ -343,15 +322,21 @@ export function buildClaudeContext(
     txt += `${p}: ${refs} referrals, $${Math.round(inc).toLocaleString()} income, avg $${complexity(refs, inc)}/ref, ${rows.length} active referrers\n`
   }
 
-  // Build complete dentist totals across all periods
-  const dentMap: Record<string, { practice: string; specialty: string; totalRefs: number; totalIncome: number; byPeriod: Record<string, number> }> = {}
+  const dentMap: Record<string, {
+    practice: string; specialty: string
+    totalRefs: number; totalIncome: number
+    byPeriod: Record<string, number>
+  }> = {}
 
   for (const p of periods) {
     for (const r of db[p] ?? []) {
       if (!r.referrals) continue
       const key = `${r.referrer}||${r.practice}`
       if (!dentMap[key]) {
-        dentMap[key] = { practice: r.practice, specialty: r.specialty, totalRefs: 0, totalIncome: 0, byPeriod: {} }
+        dentMap[key] = {
+          practice: r.practice, specialty: r.specialty,
+          totalRefs: 0, totalIncome: 0, byPeriod: {},
+        }
       }
       dentMap[key].totalRefs += r.referrals
       dentMap[key].totalIncome += r.income
@@ -369,7 +354,6 @@ export function buildClaudeContext(
     txt += `${d.referrer} (${d.practice}): ${d.totalRefs} refs, $${Math.round(d.totalIncome).toLocaleString()} income, avg $${complexity(d.totalRefs, d.totalIncome)}/ref | ${byQ}\n`
   }
 
-  // Practice totals
   const pracMap: Record<string, { totalRefs: number; totalIncome: number }> = {}
   for (const p of periods) {
     for (const r of db[p] ?? []) {
