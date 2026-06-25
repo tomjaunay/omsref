@@ -498,7 +498,17 @@ const fetchData = useCallback(async () => {
                       style={{ marginBottom: 12, padding: '7px 12px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 7, width: 280, background: 'var(--surface)', color: 'var(--text)' }}
                     />
                     <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, tableLayout: 'fixed'  }}>
+                        <colgroup>
+                          <col style={{ width: 40 }} />   {/* # */}
+                          <col style={{ width: 180 }} />  {/* Dentist */}
+                          <col style={{ width: 150 }} />  {/* Practice */}
+                            {sortedSelected.map(p => (
+                            <col key={p} style={{ width: 70 }} />
+                                  ))}
+                            <col style={{ width: 100 }} />  {/* Total */}
+                            <col style={{ width: 200 }} />  {/* Trend */}
+                        </colgroup>
                         <thead>
                           <tr>
                             <th style={S.th}>#</th>
@@ -524,23 +534,23 @@ const fetchData = useCallback(async () => {
                                 onMouseEnter={e => Array.from(e.currentTarget.cells).forEach(c => (c.style.background = '#f2f1ee'))}
                                 onMouseLeave={e => Array.from(e.currentTarget.cells).forEach(c => (c.style.background = ''))}>
                                 <td style={{ ...S.td, color: 'var(--muted)', fontSize: 11 }}>{i + 1}</td>
-                                <td style={{ ...S.td, fontWeight: 500, whiteSpace: 'nowrap' }}>
+                                <td style={{ ...S.td, fontWeight: 500, whiteSpace: 'nowrap', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                   {d.referrer}
                                   {isOrtho && (
                                     <span style={{ marginLeft: 6, fontSize: 10, background: 'var(--amber-l)', color: 'var(--amber)', padding: '1px 5px', borderRadius: 4, fontWeight: 500 }}>Ortho</span>
                                   )}
                                 </td>
-                                <td style={{ ...S.td, color: 'var(--muted)', fontSize: 12, maxWidth: 170, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.practice}</td>
+                                <td style={{ ...S.td, color: 'var(--muted)', fontSize: 12, maxWidth: 150, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.practice}</td>
                                 {vals.map((v, vi) => (
                                   <td key={vi} style={{ ...S.tdNum, color: v === 0 ? 'var(--muted)' : 'var(--text)' }}>{metricFmt(metric, v)}</td>
                                 ))}
                                 <td style={{ ...S.tdNum, fontWeight: 600 }}>{metricFmt(metric, tot)}</td>
-                                <td style={S.td}>
+                                  <td style={{ ...S.td, minWidth: 200 }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                                     <Sparkline vals={vals} />
                                     <ChangePill vals={vals} />
-                                  </div>
-                                </td>
+                                    </div>
+                                  </td>
                               </tr>
                             )
                           })}
