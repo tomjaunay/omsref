@@ -244,32 +244,72 @@ export function parseGentuCSV(text: string): Omit<RawRow, 'period'>[] | null {
   return rows.length ? rows : null
 }
 
-// ── Trend bands ───────────────────────────────────────────────────────────────
+// ── Statistical helpers ───────────────────────────────────────────────────────
 
-export interface TrendBand {
-  min: number; max: number
-  stroke: string; pillClass: string; label: string; swatch: string
+export interface TrendStats {
+  latestVsMedian: number      // % deviation of latest from median of previous quarters
+  cv: number                  // coefficient of variation across all active quarters (%)
+  cvLabel: 'stable' | 'variable' | 'erratic' | 'insufficient'
+  hasEnoughData: boolean      // requires >= 4 active quarters
+  median: number              // median of previous quarters
+  latest: number              // latest quarter value
 }
 
-export const TREND_BANDS: TrendBand[] = [
-  { min: 20,        max: Infinity, stroke: '#1a7a35', pillClass: 'pill-up2',  label: 'Strong up',   swatch: '#1a7a35' },
-  { min: 5,         max: 20,       stroke: '#6aaa6a', pillClass: 'pill-up1',  label: 'Mild up',     swatch: '#6aaa6a' },
-  { min: -5,        max: 5,        stroke: '#c89a00', pillClass: 'pill-flat', label: 'Flat',        swatch: '#c89a00' },
-  { min: -20,       max: -5,       stroke: '#d4732a', pillClass: 'pill-dn1',  label: 'Mild down',   swatch: '#d4732a' },
-  { min: -Infinity, max: -20,      stroke: '#b33030', pillClass: 'pill-dn2',  label: 'Strong down', swatch: '#b33030' },
-]
+function median(vals: number[]): number {
+  if (vals.length === 0) return 0
+  const sorted = [...vals].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 !== 0
+    ? sorted[mid]
+    : (sorted[mid - 1] + sorted[mid]) / 2
+}
+
+function stddev(vals: number[], mean: number): number {
+  if (vals.length < 2) return 0
+  const variance = vals.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / vals.length
+  return Math.sqrt(variance)
+}
+
+export function calcTrendStats(vals: number[]): TrendStats {
+  const active = vals.filter(v => v > 0)
+
+  if (active.length < 4) {
+    return {
+      latestVsMedian: 0, cv: 0,
+      cvLabel: 'insufficient', hasEnoughData: false,
+      median: 0, latest: active[active.length - 1] ?? 0,
+    }
+  }
+
+  const latest = active[active.length - 1]
+  const previous = active.slice(0, -1)
+  const med = median(previous)
+  const latestVsMedian = med > 0 ? ((latest - med) / med) * 100 : 0
+
+  // CV across all active quarters
+  const mean = active.reduce((s, v) => s + v, 0) / active.length
+  const cv = mean > 0 ? (stddev(active, mean) / mean) * 100 : 0
+
+  const cvLabel: TrendStats['cvLabel'] =
+    cv < 30 ? 'stable' : cv < 50 ? 'variable' : 'erratic'
+
+  return {
+    latestVsMedian: Math.round(latestVsMedian),
+    cv: Math.round(cv),
+    cvLabel,
+    hasEnoughData: true,
+    median: Math.round(med * 10) / 10,
+    latest,
+  }
+}
 
 export function getTrendBand(vals: number[]): TrendBand {
-  const nz = vals.filter(v => v > 0)
-  if (nz.length < 2) return TREND_BANDS[2]
-  
-  const latest = nz[nz.length - 1]
-  const previous = nz.slice(0, -1)
-  const avgPrevious = previous.reduce((s, v) => s + v, 0) / previous.length
-  
-  if (avgPrevious === 0) return TREND_BANDS[2]
-  const pct = (latest - avgPrevious) / avgPrevious * 100
-  
+  const active = vals.filter(v => v > 0)
+  if (active.length < 4) return TREND_BANDS[2]
+
+  const stats = calcTrendStats(vals)
+  const pct = stats.latestVsMedian
+
   return TREND_BANDS.find(b => pct >= b.min && pct < b.max) ?? TREND_BANDS[4]
 }
 
