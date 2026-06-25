@@ -302,7 +302,18 @@ export function calcTrendStats(vals: number[]): TrendStats {
     latest,
   }
 }
+export interface TrendBand {
+  min: number; max: number
+  stroke: string; pillClass: string; label: string; swatch: string
+}
 
+export const TREND_BANDS: TrendBand[] = [
+  { min: 20,        max: Infinity, stroke: '#1a7a35', pillClass: 'pill-up2',  label: 'Strong up',   swatch: '#1a7a35' },
+  { min: 5,         max: 20,       stroke: '#6aaa6a', pillClass: 'pill-up1',  label: 'Mild up',     swatch: '#6aaa6a' },
+  { min: -5,        max: 5,        stroke: '#c89a00', pillClass: 'pill-flat', label: 'Flat',        swatch: '#c89a00' },
+  { min: -20,       max: -5,       stroke: '#d4732a', pillClass: 'pill-dn1',  label: 'Mild down',   swatch: '#d4732a' },
+  { min: -Infinity, max: -20,      stroke: '#b33030', pillClass: 'pill-dn2',  label: 'Strong down', swatch: '#b33030' },
+]
 export function getTrendBand(vals: number[]): TrendBand {
   const active = vals.filter(v => v > 0)
   if (active.length < 4) return TREND_BANDS[2]
