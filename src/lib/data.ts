@@ -377,3 +377,36 @@ export function buildClaudeContext(
 
   return txt
 }
+// ── CSV parser ────────────────────────────────────────────────────────────────
+
+export function parseGentuCSV(text: string): Omit<RawRow, 'period'>[] | null {
+  const lines = text.trim().split(/\r?\n/)
+  if (lines.length < 2) return null
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
+  const rows: Omit<RawRow, 'period'>[] = []
+  for (let i = 1; i < lines.length; i++) {
+    const cells: string[] = []
+    let cur = '', inQ = false
+    for (const ch of lines[i]) {
+      if (ch === '"') inQ = !inQ
+      else if (ch === ',' && !inQ) { cells.push(cur.trim()); cur = '' }
+      else cur += ch
+    }
+    cells.push(cur.trim())
+    const obj: Record<string, string> = {}
+    headers.forEach((h, idx) => (obj[h] = cells[idx] ?? ''))
+    if (!obj['Referrer'] || !obj['Referrals']) continue
+    const income = parseFloat((obj['Income Generated'] ?? '0').replace(/[$,]/g, '')) || 0
+    const referrals = parseInt(obj['Referrals']) || 0
+    if (!referrals) continue
+    rows.push({
+      referrer: obj['Referrer'].trim(),
+      practice: (obj['Practice'] ?? '').trim(),
+      specialty: (obj['Specialty'] ?? 'Unknown').trim() || 'Unknown',
+      suburb: (obj['Suburb'] ?? '').trim(),
+      referrals,
+      income: Math.round(income * 100) / 100,
+    })
+  }
+  return rows.length ? rows : null
+}
