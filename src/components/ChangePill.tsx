@@ -27,7 +27,6 @@ const PILL_BASE: React.CSSProperties = {
   padding: '1px 7px',
   borderRadius: 8,
   fontWeight: 500,
-  whiteSpace: 'nowrap' as const,
   display: 'inline-block',
 }
 
@@ -59,22 +58,19 @@ export default function ChangePill({ vals }: ChangePillProps) {
 
   const sign = pct > 0 ? '+' : ''
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      {/* Deviation from median */}
-      <span
-        style={{ ...PILL_BASE, ...deviationStyle }}
-        title={`Latest: ${stats.latest} · Median of previous qtrs: ${stats.median}`}
-      >
-        {sign}{pct}% vs med
-      </span>
-      {/* CV volatility badge */}
-      <span
-        style={{ ...PILL_BASE, ...CV_STYLES[stats.cvLabel] }}
-        title={`Coefficient of variation: ${stats.cv}% — measures consistency across all active quarters`}
-      >
-        {CV_LABELS[stats.cvLabel]} (CV {stats.cv}%)
-      </span>
-    </div>
-  )
-}
+return (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 150 }}>
+    <span
+      style={{ ...PILL_BASE, ...deviationStyle }}
+      title={`Latest: ${stats.latest} · Median of previous qtrs: ${stats.median}`}
+    >
+      {sign}{pct}% vs median
+    </span>
+    <span
+      style={{ ...PILL_BASE, ...CV_STYLES[stats.cvLabel] }}
+      title={`Coefficient of variation: ${stats.cv}% — measures consistency across all active quarters`}
+    >
+      {CV_LABELS[stats.cvLabel]} (CV {stats.cv}%)
+    </span>
+  </div>
+)
