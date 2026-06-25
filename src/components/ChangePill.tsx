@@ -39,7 +39,7 @@ export default function ChangePill({ vals }: ChangePillProps) {
 
   if (!stats.hasEnoughData) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 150 }}>
         <span style={{ ...PILL_BASE, ...CV_STYLES.insufficient }}>
           need 4+ qtrs
         </span>
@@ -47,7 +47,6 @@ export default function ChangePill({ vals }: ChangePillProps) {
     )
   }
 
-  // Deviation pill colour — reuse the same band logic
   const pct = stats.latestVsMedian
   let deviationStyle = DEVIATION_STYLES['pill-flat']
   if (pct >= 20)       deviationStyle = DEVIATION_STYLES['pill-up2']
@@ -58,19 +57,20 @@ export default function ChangePill({ vals }: ChangePillProps) {
 
   const sign = pct > 0 ? '+' : ''
 
-return (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 150 }}>
-    <span
-      style={{ ...PILL_BASE, ...deviationStyle }}
-      title={`Latest: ${stats.latest} · Median of previous qtrs: ${stats.median}`}
-    >
-      {sign}{pct}% vs median
-    </span>
-    <span
-      style={{ ...PILL_BASE, ...CV_STYLES[stats.cvLabel] }}
-      title={`Coefficient of variation: ${stats.cv}% — measures consistency across all active quarters`}
-    >
-      {CV_LABELS[stats.cvLabel]} (CV {stats.cv}%)
-    </span>
-  </div>
-)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 150 }}>
+      <span
+        style={{ ...PILL_BASE, ...deviationStyle }}
+        title={`Latest: ${stats.latest} · Median of previous qtrs: ${stats.median}`}
+      >
+        {sign}{pct}% vs median
+      </span>
+      <span
+        style={{ ...PILL_BASE, ...CV_STYLES[stats.cvLabel] }}
+        title={`Coefficient of variation: ${stats.cv}% — measures consistency across all active quarters`}
+      >
+        {CV_LABELS[stats.cvLabel]} (CV {stats.cv}%)
+      </span>
+    </div>
+  )
+}
