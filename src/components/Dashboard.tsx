@@ -453,7 +453,7 @@ const fetchData = useCallback(async () => {
                               <th key={p} style={{ ...S.th, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{p}</th>
                             ))}
                             <th style={{ ...S.th, textAlign: 'right', color: 'var(--accent-d)' }}>Total {ml}</th>
-                            <th style={S.th}>Trend</th>
+                            <th style={{ ...S.th, minWidth: 160 }}>Trend</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -508,7 +508,7 @@ const fetchData = useCallback(async () => {
                               <th key={p} style={{ ...S.th, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{p}</th>
                             ))}
                             <th style={{ ...S.th, textAlign: 'right', color: 'var(--accent-d)' }}>Total {ml}</th>
-                            <th style={S.th}>Trend</th>
+                            <th style={{ ...S.th, minWidth: 160 }}>Trend</th>
                           </tr>
                         </thead>
                         <tbody>
