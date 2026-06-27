@@ -2,6 +2,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import AskClaude from './AskClaude'
+import ReviewsTab from './ReviewsTab'
+import PromoTab from './PromoTab'
 import Sparkline from './Sparkline'
 import ChangePill from './ChangePill'
 import { createBrowserSupabase } from '@/lib/supabase'
@@ -242,7 +244,7 @@ export default function Dashboard({ practiceId: practiceIdOverride }: DashboardP
   const [loading, setLoading] = useState(true)
   const [practiceName, setPracticeName] = useState<string>('')
 
-  const [mainTab, setMainTab] = useState<'dashboard' | 'upload' | 'manage'>('dashboard')
+const [mainTab, setMainTab] = useState<'dashboard' | 'upload' | 'manage' | 'reviews' | 'promo'>('dashboard')
   const [dashTab, setDashTab] = useState<DashTab>('practices')
   const [metric, setMetric] = useState<Metric>('refs')
 
@@ -327,11 +329,15 @@ const fetchData = useCallback(async () => {
   </span>
 </div>
           <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-            {(['dashboard', 'upload', 'manage'] as const).map(t => (
-              <button key={t} style={S.tabBtn(mainTab === t)} onClick={() => setMainTab(t)}>
-                {t === 'dashboard' ? 'Dashboard' : t === 'upload' ? '+ Upload quarter' : 'Manage data'}
-              </button>
-            ))}
+{(['dashboard', 'upload', 'manage', 'reviews', 'promo'] as const).map(t => (
+  <button key={t} style={S.tabBtn(mainTab === t)} onClick={() => setMainTab(t)}>
+    {t === 'dashboard' ? 'Dashboard'
+      : t === 'upload' ? '+ Upload quarter'
+      : t === 'manage' ? 'Manage data'
+      : t === 'reviews' ? 'Google Reviews'
+      : 'Promo activity'}
+  </button>
+))}
             <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 6px' }} />
             <button
               onClick={() => router.push('/account')}
@@ -626,6 +632,15 @@ const fetchData = useCallback(async () => {
             practiceId={practiceIdOverride}
           />
         )}
+	{/* REVIEWS */}
+{mainTab === 'reviews' && (
+  <ReviewsTab practiceId={practiceIdOverride} />
+)}
+
+{/* PROMO */}
+{mainTab === 'promo' && (
+  <PromoTab practiceId={practiceIdOverride} />
+)}
       </div>
     </div>
   )
