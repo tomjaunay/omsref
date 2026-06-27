@@ -240,6 +240,7 @@ export default function Dashboard({ practiceId: practiceIdOverride }: DashboardP
   const [allPeriods, setAllPeriods] = useState<string[]>([])
   const [selected, setSelected] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
+  const [practiceName, setPracticeName] = useState<string>('')
 
   const [mainTab, setMainTab] = useState<'dashboard' | 'upload' | 'manage'>('dashboard')
   const [dashTab, setDashTab] = useState<DashTab>('practices')
@@ -259,23 +260,24 @@ export default function Dashboard({ practiceId: practiceIdOverride }: DashboardP
     router.push('/login')
   }
 
-  const fetchData = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/periods?t=${Date.now()}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ practiceId: practiceIdOverride }),
-        cache: 'no-store',
-      })
-      const data = await res.json()
-      setDb(data.db ?? {})
-      setAllPeriods(data.periods ?? [])
-      setSelected(data.periods ?? [])
-    } catch (e) {
-      console.error('Failed to fetch data:', e)
-    }
-    setLoading(false)
-  }, [practiceIdOverride])
+const fetchData = useCallback(async () => {
+  try {
+    const res = await fetch(`/api/periods?t=${Date.now()}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ practiceId: practiceIdOverride }),
+      cache: 'no-store',
+    })
+    const data = await res.json()
+    setDb(data.db ?? {})
+    setAllPeriods(data.periods ?? [])
+    setSelected(data.periods ?? [])
+    if (data.practiceName) setPracticeName(data.practiceName)
+  } catch (e) {
+    console.error('Failed to fetch data:', e)
+  }
+  setLoading(false)
+}, [practiceIdOverride])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -313,11 +315,17 @@ export default function Dashboard({ practiceId: practiceIdOverride }: DashboardP
       {!practiceIdOverride && (
         <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--divider)', padding: '0 24px', height: 54, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-            <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-.3px' }}>OMFS Referral Analytics</span>
-            <span style={{ fontSize: 12, color: 'var(--muted)', fontFamily: 'var(--font-mono)' }}>
-              {allPeriods.length > 0 ? `${allPeriods[0]} – ${allPeriods[allPeriods.length - 1]}` : 'no data'}
-            </span>
-          </div>
+  <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-.3px' }}>OMFS Referral Analytics</span>
+  {practiceName && (
+    <>
+      <span style={{ color: 'var(--border)', fontSize: 14 }}>|</span>
+      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--accent-d)' }}>{practiceName}</span>
+    </>
+  )}
+  <span style={{ fontSize: 12, color: 'var(--muted)', fontFamily: 'var(--font-mono)' }}>
+    {allPeriods.length > 0 ? `${allPeriods[0]} – ${allPeriods[allPeriods.length - 1]}` : 'no data'}
+  </span>
+</div>
           <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
             {(['dashboard', 'upload', 'manage'] as const).map(t => (
               <button key={t} style={S.tabBtn(mainTab === t)} onClick={() => setMainTab(t)}>

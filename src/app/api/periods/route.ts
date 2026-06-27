@@ -16,11 +16,17 @@ export async function POST(req: NextRequest) {
 
     if (!profile) return NextResponse.json({ error: 'No profile found' }, { status: 403 })
 
-    // Superadmin can override practice_id via request body
     const body = await req.json().catch(() => ({}))
     const practiceId = (profile.role === 'superadmin' && body.practiceId)
       ? body.practiceId
       : profile.practice_id
+
+    // Fetch practice name
+    const { data: practice } = await supabase
+      .from('practices')
+      .select('name')
+      .eq('id', practiceId)
+      .single()
 
     const { data: rows, error } = await supabase
       .from('referrer_rows')
@@ -36,7 +42,7 @@ export async function POST(req: NextRequest) {
     }
 
     const periods = sortPeriods(Object.keys(db))
-    return NextResponse.json({ db, periods })
+    return NextResponse.json({ db, periods, practiceName: practice?.name ?? '' })
   } catch (err) {
     console.error('POST /api/periods error:', err)
     return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 })
