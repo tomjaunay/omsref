@@ -64,7 +64,7 @@ export default function AdminPage() {
       <div style={{ background: '#fff', borderBottom: '1px solid #ebe9e4', padding: '0 24px', height: 54, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
           <span style={{ fontSize: 15, fontWeight: 600 }}>OMFS Analytics</span>
-          <span style={{ fontSize: 12, color: '#7a7870', background: '#fce8e8', padding: '1px 8px', borderRadius: 10, color: '#9b2222', fontWeight: 500 }}>Superadmin</span>
+          <span style={{ fontSize: 12, background: '#fce8e8', padding: '1px 8px', borderRadius: 10, color: '#9b2222', fontWeight: 500 }}>Superadmin</span>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => router.push('/account')} style={{ padding: '6px 14px', fontSize: 13, borderRadius: 6, border: '1px solid #e2e0db', background: 'transparent', cursor: 'pointer', color: '#7a7870' }}>
