@@ -1,16 +1,25 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createServerSupabase } from '@/lib/auth'
 import { sortPeriods } from '@/lib/data'
 
 export async function POST() {
-  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').replace(/\/$/, '')
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
-
   try {
-    const client = createClient(url, key)
-    const { data: rows, error } = await client
+    const supabase = createServerSupabase()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('practice_id, role')
+      .eq('id', session.user.id)
+      .single()
+
+    if (!profile) return NextResponse.json({ error: 'No profile found' }, { status: 403 })
+
+    const { data: rows, error } = await supabase
       .from('referrer_rows')
       .select('period, referrer, practice, specialty, suburb, referrals, income')
+      .eq('practice_id', profile.practice_id)
 
     if (error) throw error
 
@@ -21,7 +30,6 @@ export async function POST() {
     }
 
     const periods = sortPeriods(Object.keys(db))
-
     return NextResponse.json({ db, periods })
   } catch (err) {
     console.error('POST /api/periods error:', err)

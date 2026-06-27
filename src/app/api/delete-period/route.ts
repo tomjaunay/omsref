@@ -1,20 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createServerSupabase } from '@/lib/auth'
 
 export async function POST(req: NextRequest) {
-  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').replace(/\/$/, '')
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
-  const client = createClient(supabaseUrl, supabaseKey)
-
   try {
-    const body = await req.json()
-    const period = body.period as string
-    if (!period) {
-      return NextResponse.json({ error: 'period required' }, { status: 400 })
+    const supabase = createServerSupabase()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('practice_id, role')
+      .eq('id', session.user.id)
+      .single()
+
+    if (!profile || !['superadmin', 'admin'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    await client.from('referrer_rows').delete().eq('period', period)
-    await client.from('periods').delete().eq('period', period)
+    const { period, practiceId } = await req.json()
+    if (!period) return NextResponse.json({ error: 'period required' }, { status: 400 })
+
+    const targetPracticeId = (profile.role === 'superadmin' && practiceId)
+      ? practiceId
+      : profile.practice_id
+
+    await supabase.from('referrer_rows').delete()
+      .eq('practice_id', targetPracticeId).eq('period', period)
+
+    await supabase.from('periods').delete()
+      .eq('practice_id', targetPracticeId).eq('period', period)
 
     return NextResponse.json({ ok: true, deleted: period })
   } catch (err) {
