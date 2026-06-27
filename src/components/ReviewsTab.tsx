@@ -27,11 +27,11 @@ interface UploadRecord {
   period: string
   review_count: number
   uploaded_at: string
-  avg_rating: number | null
-  positive_reviews: number
-  negative_reviews: number
-  net_sentiment: number
-  summary: string | null
+  avg_rating?: number | null
+  positive_reviews?: number
+  negative_reviews?: number
+  net_sentiment?: number
+  summary?: string | null
 }
 
 interface ReviewsTabProps {
@@ -86,10 +86,10 @@ function parsePastedReviews(text: string): Array<{ text: string; rating: number;
 
 // ── Sentiment helpers ─────────────────────────────────────────────────────────
 function sentimentColor(net: number): string {
-  if (net > 5)  return '#1a7a35'
-  if (net > 0)  return '#6aaa6a'
+  if (net > 5)   return '#1a7a35'
+  if (net > 0)   return '#6aaa6a'
   if (net === 0) return '#c89a00'
-  if (net > -5) return '#d4732a'
+  if (net > -5)  return '#d4732a'
   return '#b33030'
 }
 
@@ -395,11 +395,32 @@ export default function ReviewsTab({ practiceId }: ReviewsTabProps) {
 
   useEffect(() => { fetchScores() }, [fetchScores])
 
+  // Clipboard paste listener for screenshots
+  useEffect(() => {
+    if (view !== 'upload' || uploadMode !== 'screenshot') return
+
+    function handlePaste(e: ClipboardEvent) {
+      const items = Array.from(e.clipboardData?.items ?? [])
+      const imageItems = items.filter(item => item.type.startsWith('image/'))
+      if (imageItems.length === 0) return
+      const files = imageItems
+        .map(item => item.getAsFile())
+        .filter((f): f is File => f !== null)
+      if (files.length > 0) {
+        setScreenshots(prev => [...prev, ...files])
+        setExtractedReviews(null)
+      }
+    }
+
+    window.addEventListener('paste', handlePaste)
+    return () => window.removeEventListener('paste', handlePaste)
+  }, [view, uploadMode])
+
   const allPeriods = [...new Set(scores.map(s => s.period))].sort()
   const sortedSelected = [...selectedPeriods].sort()
   const activeThemes = themes.filter(t => t.active)
 
-  // ── Extract from screenshots ─────────────────────────────────────────────────
+  // ── Extract from screenshots ──────────────────────────────────────────────
   async function doExtract() {
     setExtracting(true)
     setUploadMsg(null)
@@ -428,7 +449,7 @@ export default function ReviewsTab({ practiceId }: ReviewsTabProps) {
     setExtracting(false)
   }
 
-  // ── Upload & analyse ──────────────────────────────────────────────────────────
+  // ── Upload & analyse ──────────────────────────────────────────────────────
   async function doUpload() {
     if (!/^\d{4}Q[1-4]$/.test(uploadPeriod)) return
     setUploading(true)
@@ -613,17 +634,17 @@ export default function ReviewsTab({ practiceId }: ReviewsTabProps) {
                     key={u.period}
                     style={{
                       background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
-                      padding: '13px 16px', borderLeft: `3px solid ${sentimentColor(u.net_sentiment)}`,
+                      padding: '13px 16px', borderLeft: `3px solid ${sentimentColor(u?.net_sentiment ?? 0)}`,
                     }}
                   >
                     <div style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--font-mono)', marginBottom: 4 }}>{u.period}</div>
-                    <div style={{ fontSize: 19, fontWeight: 600, color: sentimentColor(u.net_sentiment) }}>
-                      {u.net_sentiment > 0 ? '+' : ''}{u.net_sentiment}
+                    <div style={{ fontSize: 19, fontWeight: 600, color: sentimentColor(u?.net_sentiment ?? 0) }}>
+                      {(u?.net_sentiment ?? 0) > 0 ? '+' : ''}{u?.net_sentiment ?? 0}
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>
-                      {u.avg_rating != null ? `${u.avg_rating}★ · ` : ''}{u.review_count} reviews
+                      {u?.avg_rating != null ? `${u.avg_rating}★ · ` : ''}{u?.review_count ?? 0} reviews
                     </div>
-                    {u.summary && (
+                    {u?.summary && (
                       <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6, lineHeight: 1.5, fontStyle: 'italic' }}>
                         {u.summary.slice(0, 100)}{u.summary.length > 100 ? '…' : ''}
                       </div>
@@ -664,7 +685,7 @@ export default function ReviewsTab({ practiceId }: ReviewsTabProps) {
                             {p}
                             {u && (
                               <div style={{ fontSize: 10, fontWeight: 400, marginTop: 1 }}>
-                                {u.review_count} reviews{u.avg_rating != null ? ` · ${u.avg_rating}★` : ''}
+                                {u.review_count} reviews{u?.avg_rating != null ? ` · ${u.avg_rating}★` : ''}
                               </div>
                             )}
                           </th>
@@ -778,7 +799,7 @@ export default function ReviewsTab({ practiceId }: ReviewsTabProps) {
           {uploadMode === 'screenshot' && (
             <div style={{ marginBottom: 18 }}>
               <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 5, fontWeight: 500 }}>
-                Take screenshots of your Google reviews page and upload them here — Claude will extract all visible reviews automatically
+                Take screenshots of your Google reviews page and upload them here — or press Ctrl+V to paste directly from clipboard
               </label>
               <div
                 onClick={() => screenshotRef.current?.click()}
@@ -798,12 +819,12 @@ export default function ReviewsTab({ practiceId }: ReviewsTabProps) {
                     <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--accent)' }}>
                       {screenshots.length} screenshot{screenshots.length !== 1 ? 's' : ''} selected
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>Click to add more</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>Click to add more · or Ctrl+V to paste</div>
                   </div>
                 ) : (
                   <div>
                     <div style={{ fontSize: 28, marginBottom: 8 }}>📷</div>
-                    <div style={{ fontSize: 14, color: 'var(--muted)' }}>Drop screenshots here or click to browse</div>
+                    <div style={{ fontSize: 14, color: 'var(--muted)' }}>Drop screenshots here, click to browse, or <strong>Ctrl+V to paste</strong></div>
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>PNG or JPG — upload multiple to capture all reviews</div>
                   </div>
                 )}
@@ -832,7 +853,11 @@ export default function ReviewsTab({ practiceId }: ReviewsTabProps) {
                         style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)' }}
                       />
                       <button
-                        onClick={e => { e.stopPropagation(); setScreenshots(prev => prev.filter((_, j) => j !== i)); setExtractedReviews(null) }}
+                        onClick={e => {
+                          e.stopPropagation()
+                          setScreenshots(prev => prev.filter((_, j) => j !== i))
+                          setExtractedReviews(null)
+                        }}
                         style={{ position: 'absolute', top: -6, right: -6, width: 18, height: 18, borderRadius: '50%', background: 'var(--red)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                       >×</button>
                     </div>
@@ -1005,8 +1030,8 @@ export default function ReviewsTab({ practiceId }: ReviewsTabProps) {
                 <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 14, minWidth: 70 }}>{u.period}</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 500 }}>
-                    {u.review_count} reviews · net {u.net_sentiment > 0 ? '+' : ''}{u.net_sentiment}
-                    {u.avg_rating != null ? ` · ${u.avg_rating}★` : ''}
+                    {u.review_count} reviews · net {(u?.net_sentiment ?? 0) > 0 ? '+' : ''}{u?.net_sentiment ?? 0}
+                    {u?.avg_rating != null ? ` · ${u.avg_rating}★` : ''}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--muted)' }}>
                     Uploaded {new Date(u.uploaded_at).toLocaleDateString('en-AU')}
