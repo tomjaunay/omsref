@@ -1,8 +1,10 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import AskClaude from './AskClaude'
 import Sparkline from './Sparkline'
 import ChangePill from './ChangePill'
+import { createBrowserSupabase } from '@/lib/supabase'
 import {
   type RawRow, type Metric, type DashTab, type SortDir, type SortOption,
   PRAC_SORTS, DENT_SORTS, TREND_BANDS,
@@ -55,7 +57,13 @@ function SortButton({ dir, onClick }: { dir: SortDir; onClick: () => void }) {
 }
 
 // ── Upload tab ─────────────────────────────────────────────────────────────────
-function UploadTab({ onSuccess }: { onSuccess: () => void }) {
+function UploadTab({
+  onSuccess,
+  practiceId,
+}: {
+  onSuccess: () => void
+  practiceId?: string
+}) {
   const [period, setPeriod] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -73,7 +81,7 @@ function UploadTab({ onSuccess }: { onSuccess: () => void }) {
       const res = await fetch('/api/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ period, csvText }),
+        body: JSON.stringify({ period, csvText, practiceId }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Upload failed')
@@ -169,21 +177,22 @@ function UploadTab({ onSuccess }: { onSuccess: () => void }) {
 
 // ── Manage tab ─────────────────────────────────────────────────────────────────
 function ManageTab({
-  db, periods, onDeleted
+  db, periods, onDeleted, practiceId,
 }: {
   db: Record<string, RawRow[]>
   periods: string[]
   onDeleted: () => void
+  practiceId?: string
 }) {
-async function del(p: string) {
-  if (!confirm(`Delete ${p}? This cannot be undone.`)) return
-  await fetch('/api/delete-period', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ period: p }),
-  })
-  onDeleted()
-}
+  async function del(p: string) {
+    if (!confirm(`Delete ${p}? This cannot be undone.`)) return
+    await fetch('/api/delete-period', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ period: p, practiceId }),
+    })
+    onDeleted()
+  }
 
   return (
     <div style={{ maxWidth: 560 }}>
@@ -221,7 +230,12 @@ async function del(p: string) {
 }
 
 // ── Main Dashboard ─────────────────────────────────────────────────────────────
-export default function Dashboard() {
+interface DashboardProps {
+  practiceId?: string // optional override for superadmin viewing another practice
+}
+
+export default function Dashboard({ practiceId: practiceIdOverride }: DashboardProps) {
+  const router = useRouter()
   const [db, setDb] = useState<Record<string, RawRow[]>>({})
   const [allPeriods, setAllPeriods] = useState<string[]>([])
   const [selected, setSelected] = useState<string[]>([])
@@ -239,21 +253,29 @@ export default function Dashboard() {
   const [pracSearch, setPracSearch] = useState('')
   const [dentSearch, setDentSearch] = useState('')
 
-const fetchData = useCallback(async () => {
-  try {
-    const res = await fetch('/api/periods', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    })
-    const data = await res.json()
-    setDb(data.db ?? {})
-    setAllPeriods(data.periods ?? [])
-    setSelected(data.periods ?? [])
-  } catch (e) {
-    console.error('Failed to fetch data:', e)
+  async function handleSignOut() {
+    const supabase = createBrowserSupabase()
+    await supabase.auth.signOut()
+    router.push('/login')
   }
-  setLoading(false)
-}, [])
+
+  const fetchData = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/periods?t=${Date.now()}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ practiceId: practiceIdOverride }),
+        cache: 'no-store',
+      })
+      const data = await res.json()
+      setDb(data.db ?? {})
+      setAllPeriods(data.periods ?? [])
+      setSelected(data.periods ?? [])
+    } catch (e) {
+      console.error('Failed to fetch data:', e)
+    }
+    setLoading(false)
+  }, [practiceIdOverride])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -287,22 +309,37 @@ const fetchData = useCallback(async () => {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-      {/* Header */}
-      <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--divider)', padding: '0 24px', height: 54, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-          <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-.3px' }}>OMFS Referral Analytics</span>
-          <span style={{ fontSize: 12, color: 'var(--muted)', fontFamily: 'var(--font-mono)' }}>
-            {allPeriods.length > 0 ? `${allPeriods[0]} – ${allPeriods[allPeriods.length - 1]}` : 'no data'}
-          </span>
-        </div>
-        <div style={{ display: 'flex', gap: 3 }}>
-          {(['dashboard', 'upload', 'manage'] as const).map(t => (
-            <button key={t} style={S.tabBtn(mainTab === t)} onClick={() => setMainTab(t)}>
-              {t === 'dashboard' ? 'Dashboard' : t === 'upload' ? '+ Upload quarter' : 'Manage data'}
+      {/* Header — only shown when not embedded in admin panel */}
+      {!practiceIdOverride && (
+        <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--divider)', padding: '0 24px', height: 54, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+            <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-.3px' }}>OMFS Referral Analytics</span>
+            <span style={{ fontSize: 12, color: 'var(--muted)', fontFamily: 'var(--font-mono)' }}>
+              {allPeriods.length > 0 ? `${allPeriods[0]} – ${allPeriods[allPeriods.length - 1]}` : 'no data'}
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+            {(['dashboard', 'upload', 'manage'] as const).map(t => (
+              <button key={t} style={S.tabBtn(mainTab === t)} onClick={() => setMainTab(t)}>
+                {t === 'dashboard' ? 'Dashboard' : t === 'upload' ? '+ Upload quarter' : 'Manage data'}
+              </button>
+            ))}
+            <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 6px' }} />
+            <button
+              onClick={() => router.push('/account')}
+              style={{ padding: '6px 12px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--muted)' }}
+            >
+              Account
             </button>
-          ))}
+            <button
+              onClick={handleSignOut}
+              style={{ padding: '6px 12px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--red)' }}
+            >
+              Sign out
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '22px 24px' }}>
 
@@ -473,7 +510,7 @@ const fetchData = useCallback(async () => {
                                   <td key={vi} style={{ ...S.tdNum, color: v === 0 ? 'var(--muted)' : 'var(--text)' }}>{metricFmt(metric, v)}</td>
                                 ))}
                                 <td style={{ ...S.tdNum, fontWeight: 600 }}>{metricFmt(metric, tot)}</td>
-                                <td style={S.td}>
+                                <td style={{ ...S.td, minWidth: 200 }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                                     <Sparkline vals={vals} />
                                     <ChangePill vals={vals} />
@@ -498,16 +535,16 @@ const fetchData = useCallback(async () => {
                       style={{ marginBottom: 12, padding: '7px 12px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 7, width: 280, background: 'var(--surface)', color: 'var(--text)' }}
                     />
                     <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, tableLayout: 'fixed'  }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, tableLayout: 'fixed' }}>
                         <colgroup>
-                          <col style={{ width: 40 }} />   {/* # */}
-                          <col style={{ width: 180 }} />  {/* Dentist */}
-                          <col style={{ width: 150 }} />  {/* Practice */}
-                            {sortedSelected.map(p => (
+                          <col style={{ width: 40 }} />
+                          <col style={{ width: 180 }} />
+                          <col style={{ width: 150 }} />
+                          {sortedSelected.map(p => (
                             <col key={p} style={{ width: 70 }} />
-                                  ))}
-                            <col style={{ width: 100 }} />  {/* Total */}
-                            <col style={{ width: 200 }} />  {/* Trend */}
+                          ))}
+                          <col style={{ width: 100 }} />
+                          <col style={{ width: 200 }} />
                         </colgroup>
                         <thead>
                           <tr>
@@ -545,12 +582,12 @@ const fetchData = useCallback(async () => {
                                   <td key={vi} style={{ ...S.tdNum, color: v === 0 ? 'var(--muted)' : 'var(--text)' }}>{metricFmt(metric, v)}</td>
                                 ))}
                                 <td style={{ ...S.tdNum, fontWeight: 600 }}>{metricFmt(metric, tot)}</td>
-                                  <td style={{ ...S.td, minWidth: 200 }}>
+                                <td style={{ ...S.td, minWidth: 200 }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                                     <Sparkline vals={vals} />
                                     <ChangePill vals={vals} />
-                                    </div>
-                                  </td>
+                                  </div>
+                                </td>
                               </tr>
                             )
                           })}
@@ -566,12 +603,20 @@ const fetchData = useCallback(async () => {
 
         {/* UPLOAD */}
         {mainTab === 'upload' && (
-          <UploadTab onSuccess={() => { fetchData(); setMainTab('dashboard') }} />
+          <UploadTab
+            onSuccess={() => { fetchData(); setMainTab('dashboard') }}
+            practiceId={practiceIdOverride}
+          />
         )}
 
         {/* MANAGE */}
         {mainTab === 'manage' && (
-          <ManageTab db={db} periods={allPeriods} onDeleted={fetchData} />
+          <ManageTab
+            db={db}
+            periods={allPeriods}
+            onDeleted={fetchData}
+            practiceId={practiceIdOverride}
+          />
         )}
       </div>
     </div>
