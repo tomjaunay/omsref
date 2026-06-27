@@ -519,6 +519,21 @@ export default function ReviewsTab({ practiceId }: ReviewsTabProps) {
     await fetchScores()
   }
 
+async function generateReport() {
+  const res = await fetch('/api/reviews/report', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ periods: sortedSelected, practiceId }),
+  })
+  if (!res.ok) { alert('Failed to generate report'); return }
+  const html = await res.text()
+  const win = window.open('', '_blank')
+  if (!win) { alert('Please allow popups to generate the report'); return }
+  win.document.write(html)
+  win.document.close()
+  setTimeout(() => win.print(), 500)
+}
+
   function getScore(themeCode: string, period: string) {
     return scores.find(s => s.theme_code === themeCode && s.period === period)
   }
@@ -572,6 +587,17 @@ export default function ReviewsTab({ practiceId }: ReviewsTabProps) {
           >
             Codebook ⚙
           </button>
+{view === 'trends' && scores.length > 0 && (
+  <button
+    onClick={generateReport}
+    style={{
+      padding: '6px 14px', fontSize: 13, borderRadius: 6, cursor: 'pointer',
+      border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)',
+    }}
+  >
+    ↓ PDF report
+  </button>
+)}
         </div>
 
         {view === 'trends' && allPeriods.length > 0 && (
