@@ -1,15 +1,17 @@
-export const runtime = 'nodejs'
-export const maxDuration = 60
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/auth'
 
+export const runtime = 'nodejs'
+export const maxDuration = 60
+
+
 export async function POST(req: NextRequest) {
   try {
     const supabase = createServerSupabase()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+const { data: { user }, error: authError } = await supabase.auth.getUser()
+    console.log('extract auth - user:', user?.id ?? 'none', 'error:', authError?.message ?? 'none')
     if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
     const { data: profile } = await supabase
       .from('user_profiles')
       .select('practice_id, role')
