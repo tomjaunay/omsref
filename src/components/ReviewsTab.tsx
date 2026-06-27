@@ -990,25 +990,27 @@ export default function ReviewsTab({ practiceId }: ReviewsTabProps) {
             </div>
           )}
 
-          {uploadSummary && (
+          {uploadSummary && uploadSummary.summary && (
             <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ padding: '14px 16px', borderRadius: 8, background: 'var(--blue-l)', color: 'var(--blue)', fontSize: 13, lineHeight: 1.6, border: '1px solid #b5d4f4' }}>
                 <div style={{ fontWeight: 600, marginBottom: 4 }}>Quarter summary</div>
                 {uploadSummary.summary}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-                {[
-                  { label: 'Avg rating', value: `${uploadSummary.overall.avg_rating}★` },
-                  { label: 'Positive', value: `+${uploadSummary.overall.positive_reviews}` },
-                  { label: 'Negative', value: `−${uploadSummary.overall.negative_reviews}` },
-                  { label: 'Net sentiment', value: `${Number(uploadSummary.overall.net_sentiment) > 0 ? '+' : ''}${uploadSummary.overall.net_sentiment}` },
-                ].map(({ label, value }) => (
-                  <div key={label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 16, fontWeight: 600 }}>{value}</div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{label}</div>
-                  </div>
-                ))}
-              </div>
+              {uploadSummary.overall && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                  {[
+                    { label: 'Avg rating', value: uploadSummary.overall.avg_rating != null ? `${uploadSummary.overall.avg_rating}★` : 'N/A' },
+                    { label: 'Positive', value: `+${uploadSummary.overall.positive_reviews ?? 0}` },
+                    { label: 'Negative', value: `−${uploadSummary.overall.negative_reviews ?? 0}` },
+                    { label: 'Net sentiment', value: `${Number(uploadSummary.overall.net_sentiment ?? 0) > 0 ? '+' : ''}${uploadSummary.overall.net_sentiment ?? 0}` },
+                  ].map(({ label, value }) => (
+                    <div key={label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+                      <div style={{ fontSize: 16, fontWeight: 600 }}>{value}</div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
