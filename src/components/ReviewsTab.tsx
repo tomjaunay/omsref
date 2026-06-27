@@ -627,49 +627,67 @@ export default function ReviewsTab({ practiceId }: ReviewsTabProps) {
             </div>
           ) : (
             <>
-              {/* Quarter summary cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(uploads.filter(u => selectedPeriods.includes(u.period)).length || 1, 6)}, 1fr)`, gap: 10, marginBottom: 20 }}>
-                {uploads.filter(u => selectedPeriods.includes(u.period)).map(u => (
-                  <div
-                    key={u.period}
-                    style={{
-                      background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
-                      padding: '13px 16px', borderLeft: `3px solid ${sentimentColor(u?.net_sentiment ?? 0)}`,
-                    }}
-                  >
-                    <div style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--font-mono)', marginBottom: 4 }}>{u.period}</div>
-                    <div style={{ fontSize: 19, fontWeight: 600, color: sentimentColor(u?.net_sentiment ?? 0) }}>
-                      {(u?.net_sentiment ?? 0) > 0 ? '+' : ''}{u?.net_sentiment ?? 0}
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>
-                      {u?.avg_rating != null ? `${u.avg_rating}★ · ` : ''}{u?.review_count ?? 0} reviews
-                    </div>
-                    {u?.summary && (
-                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6, lineHeight: 1.5, fontStyle: 'italic' }}>
-                        {u.summary.slice(0, 100)}{u.summary.length > 100 ? '…' : ''}
-                      </div>
-                    )}
-                  </div>
-                ))}
+{/* Single quarter summary card — most recent selected */}
+{(() => {
+  const latestPeriod = sortedSelected[sortedSelected.length - 1]
+  const u = uploads.find(u => u.period === latestPeriod)
+  if (!u) return null
+  return (
+    <div style={{
+      background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
+      padding: '20px 24px', marginBottom: 20,
+      borderLeft: `4px solid ${sentimentColor(u?.net_sentiment ?? 0)}`,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
+        {/* Left — period + headline metrics */}
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--font-mono)', marginBottom: 6 }}>
+            {u.period} · latest selected quarter
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+            <div style={{ fontSize: 32, fontWeight: 700, color: sentimentColor(u?.net_sentiment ?? 0), lineHeight: 1 }}>
+              {(u?.net_sentiment ?? 0) > 0 ? '+' : ''}{u?.net_sentiment ?? 0}
+            </div>
+            <div style={{ fontSize: 14, color: 'var(--muted)' }}>net sentiment</div>
+          </div>
+          <div style={{ display: 'flex', gap: 16, marginTop: 10 }}>
+            {u?.avg_rating != null && (
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 600 }}>{u.avg_rating}★</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>avg rating</div>
               </div>
-
-              {/* Legend */}
-              <div style={{ display: 'flex', gap: 16, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-                <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 500 }}>Net sentiment:</span>
-                {[
-                  { label: 'Strong positive (>+5)', color: '#1a7a35' },
-                  { label: 'Positive (+1 to +5)', color: '#6aaa6a' },
-                  { label: 'Neutral (0)', color: '#c89a00' },
-                  { label: 'Negative (−1 to −5)', color: '#d4732a' },
-                  { label: 'Strong negative (<−5)', color: '#b33030' },
-                ].map(({ label, color }) => (
-                  <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--muted)' }}>
-                    <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: color }} />
-                    {label}
-                  </span>
-                ))}
+            )}
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 600 }}>{u.review_count}</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)' }}>reviews</div>
+            </div>
+            {u?.positive_reviews != null && (
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: '#1a7a35' }}>+{u.positive_reviews}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>positive</div>
               </div>
-
+            )}
+            {u?.negative_reviews != null && u.negative_reviews > 0 && (
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: '#b33030' }}>−{u.negative_reviews}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>negative</div>
+              </div>
+            )}
+          </div>
+        </div>
+        {/* Right — summary text */}
+        {u?.summary && (
+          <div style={{
+            flex: 1, minWidth: 240, fontSize: 13, color: 'var(--muted)',
+            lineHeight: 1.7, fontStyle: 'italic', paddingTop: 4,
+          }}>
+            {u.summary}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+})()}
               {/* Theme table */}
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
