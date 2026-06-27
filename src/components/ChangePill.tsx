@@ -1,6 +1,6 @@
-import { getTrendBand } from '@/lib/data'
+import { calcTrendStats } from '@/lib/data'
 
-const PILL_STYLES: Record<string, React.CSSProperties> = {
+const DEVIATION_STYLES: Record<string, React.CSSProperties> = {
   'pill-up2':  { background: '#d4edda', color: '#155724' },
   'pill-up1':  { background: '#e8f5ee', color: '#1e6b2e' },
   'pill-flat': { background: '#f5f0e0', color: '#7a6000' },
@@ -8,25 +8,104 @@ const PILL_STYLES: Record<string, React.CSSProperties> = {
   'pill-dn2':  { background: '#fce8e8', color: '#9b2222' },
 }
 
+const CV_STYLES = {
+  stable:       { background: '#eef6ff', color: '#1a4a7a' },
+  variable:     { background: '#f5f0e0', color: '#7a6000' },
+  erratic:      { background: '#fce8e8', color: '#9b2222' },
+  insufficient: { background: '#f0f0f0', color: '#999' },
+}
+
+const CV_LABELS = {
+  stable:       'stable',
+  variable:     'variable',
+  erratic:      'erratic',
+  insufficient: '—',
+}
+
+const SIGNAL_STYLES = {
+  significant:  { background: '#1a6b3c', color: '#ffffff' },
+  possible:     { background: '#e8f5ee', color: '#145530' },
+  noise:        { background: '#f0f0f0', color: '#7a7870' },
+}
+
+function getSignal(deviationPct: number, cv: number): {
+  label: string
+  style: React.CSSProperties
+  ratio: number
+  direction: string
+} {
+  const absDev = Math.abs(deviationPct)
+  const ratio = cv > 0 ? Math.round((absDev / cv) * 10) / 10 : 0
+  const direction = deviationPct >= 0 ? '↑' : '↓'
+
+  if (ratio >= 1.5) {
+    return { label: `${direction} significant`, style: SIGNAL_STYLES.significant, ratio, direction }
+  } else if (ratio >= 0.75) {
+    return { label: `${direction} possible`, style: SIGNAL_STYLES.possible, ratio, direction }
+  } else {
+    return { label: '~ within noise', style: SIGNAL_STYLES.noise, ratio, direction }
+  }
+}
+
+const PILL_BASE: React.CSSProperties = {
+  fontSize: 10,
+  padding: '1px 7px',
+  borderRadius: 8,
+  fontWeight: 500,
+  display: 'inline-block',
+}
+
 interface ChangePillProps {
   vals: number[]
 }
 
 export default function ChangePill({ vals }: ChangePillProps) {
-  const nz = vals.filter(v => v > 0)
-  if (nz.length < 2) {
+  const stats = calcTrendStats(vals)
+
+  if (!stats.hasEnoughData) {
     return (
-      <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 8, fontWeight: 500, ...PILL_STYLES['pill-flat'] }}>
-        —
-      </span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 150 }}>
+        <span style={{ ...PILL_BASE, ...CV_STYLES.insufficient }}>
+          need 4+ qtrs
+        </span>
+      </div>
     )
   }
-  const pct = Math.round(((nz[nz.length - 1] - nz[0]) / nz[0]) * 100)
-  const band = getTrendBand(vals)
-  const style = PILL_STYLES[band.pillClass] ?? PILL_STYLES['pill-flat']
+
+  const pct = stats.latestVsMedian
+  let deviationStyle = DEVIATION_STYLES['pill-flat']
+  if (pct >= 20)       deviationStyle = DEVIATION_STYLES['pill-up2']
+  else if (pct >= 5)   deviationStyle = DEVIATION_STYLES['pill-up1']
+  else if (pct >= -5)  deviationStyle = DEVIATION_STYLES['pill-flat']
+  else if (pct >= -20) deviationStyle = DEVIATION_STYLES['pill-dn1']
+  else                 deviationStyle = DEVIATION_STYLES['pill-dn2']
+
+  const sign = pct > 0 ? '+' : ''
+  const signal = getSignal(pct, stats.cv)
+
   return (
-    <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 8, fontWeight: 500, whiteSpace: 'nowrap', ...style }}>
-      {pct > 0 ? '+' : ''}{pct}%
-    </span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 160 }}>
+      {/* Signal strength — most important, shown first */}
+      <span
+        style={{ ...PILL_BASE, ...signal.style, fontWeight: 600 }}
+        title={`Signal ratio: ${signal.ratio}× (deviation ÷ CV). >1.5× = significant, 0.75–1.5× = possible, <0.75× = within normal noise`}
+      >
+        {signal.label}
+      </span>
+      {/* Deviation from median */}
+      <span
+        style={{ ...PILL_BASE, ...deviationStyle }}
+        title={`Latest: ${stats.latest} · Median of previous qtrs: ${stats.median}`}
+      >
+        {sign}{pct}% vs median
+      </span>
+      {/* CV volatility */}
+      <span
+        style={{ ...PILL_BASE, ...CV_STYLES[stats.cvLabel] }}
+        title={`Coefficient of variation: ${stats.cv}% across all active quarters`}
+      >
+        {CV_LABELS[stats.cvLabel]} (CV {stats.cv}%)
+      </span>
+    </div>
   )
 }
