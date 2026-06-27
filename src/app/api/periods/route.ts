@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/auth'
 import { sortPeriods } from '@/lib/data'
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   try {
     const supabase = createServerSupabase()
     const { data: { session } } = await supabase.auth.getSession()
@@ -16,10 +16,16 @@ export async function POST() {
 
     if (!profile) return NextResponse.json({ error: 'No profile found' }, { status: 403 })
 
+    // Superadmin can override practice_id via request body
+    const body = await req.json().catch(() => ({}))
+    const practiceId = (profile.role === 'superadmin' && body.practiceId)
+      ? body.practiceId
+      : profile.practice_id
+
     const { data: rows, error } = await supabase
       .from('referrer_rows')
       .select('period, referrer, practice, specialty, suburb, referrals, income')
-      .eq('practice_id', profile.practice_id)
+      .eq('practice_id', practiceId)
 
     if (error) throw error
 
