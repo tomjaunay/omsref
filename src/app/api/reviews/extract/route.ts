@@ -7,13 +7,13 @@ import { createServerSupabase } from '@/lib/auth'
 export async function POST(req: NextRequest) {
   try {
     const supabase = createServerSupabase()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data: profile } = await supabase
       .from('user_profiles')
       .select('practice_id, role')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
     if (!profile || !['superadmin', 'admin'].includes(profile.role)) {
@@ -29,7 +29,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No images provided' }, { status: 400 })
     }
 
-    // Build content array with all images + extraction prompt
     const content: Array<Record<string, unknown>> = []
 
     for (const img of images) {

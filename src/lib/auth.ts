@@ -9,12 +9,14 @@ export function createServerSupabase() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '',
     {
       cookies: {
-        get(name: string) { return cookieStore.get(name)?.value },
+        get(name: string) {
+          return cookieStore.get(name)?.value
+        },
         set(name: string, value: string, options: Record<string, unknown>) {
-          try { cookieStore.set({ name, value, ...options }) } catch {}
+          try { cookieStore.set(name, value, options as Parameters<typeof cookieStore.set>[2]) } catch {}
         },
         remove(name: string, options: Record<string, unknown>) {
-          try { cookieStore.set({ name, value: '', ...options }) } catch {}
+          try { cookieStore.set(name, '', options as Parameters<typeof cookieStore.set>[2]) } catch {}
         },
       },
     }
@@ -23,27 +25,26 @@ export function createServerSupabase() {
 
 export async function getSession() {
   const supabase = createServerSupabase()
-  const { data: { session } } = await supabase.auth.getSession()
-  return session
+  const { data: { user }, error } = await supabase.auth.getUser()
+  if (error || !user) return null
+  return user
 }
 
 export async function getProfile(): Promise<UserProfile | null> {
-  const session = await getSession()
-  if (!session) return null
-
+  const user = await getSession()
+  if (!user) return null
   const supabase = createServerSupabase()
   const { data } = await supabase
     .from('user_profiles')
     .select('*')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single()
-
   return data ?? null
 }
 
 export async function requireAuth() {
-  const session = await getSession()
-  if (!session) return null
+  const user = await getSession()
+  if (!user) return null
   const profile = await getProfile()
   return profile
 }
