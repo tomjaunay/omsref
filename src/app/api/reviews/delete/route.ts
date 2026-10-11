@@ -17,15 +17,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const { period, practiceId } = await req.json()
+    const { period, practiceId, scope: rawScope } = await req.json()
+    const scope: string = rawScope || 'all'
     const targetPracticeId = (profile.role === 'superadmin' && practiceId)
       ? practiceId
       : profile.practice_id
 
     await supabase.from('review_theme_scores').delete()
-      .eq('practice_id', targetPracticeId).eq('period', period)
+      .eq('practice_id', targetPracticeId).eq('period', period).eq('scope', scope)
     await supabase.from('review_uploads').delete()
-      .eq('practice_id', targetPracticeId).eq('period', period)
+      .eq('practice_id', targetPracticeId).eq('period', period).eq('scope', scope)
 
     return NextResponse.json({ ok: true })
   } catch (err) {

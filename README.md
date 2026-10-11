@@ -105,3 +105,57 @@ src/
 supabase/
   schema.sql              ← Run this once in Supabase SQL editor
 ```
+
+---
+
+## Google Business Profile review sync (added Oct 2026)
+
+Pulls Google reviews directly from selected business profiles, buckets them by
+calendar quarter (Sydney time) per profile, and lets each bucket — combined or
+per profile — be coded against the review codebook. A Vercel cron re-syncs weekly
+(Monday ~6am Sydney).
+
+### One-off setup
+1. **Supabase:** run `supabase/migrations/20261009_gbp_review_sources.sql` in the SQL editor (safe to re-run).
+2. **Google Cloud:** in the project approved for Business Profile API access, enable
+   *My Business Account Management API*, *My Business Business Information API* and
+   *Google My Business API* (v4, reviews). Create an OAuth client (Web application) with
+   redirect URI `https://<your-domain>/api/gbp/callback` (and `http://localhost:3000/api/gbp/callback` for dev).
+   Put the consent screen in production (testing-mode refresh tokens expire after 7 days).
+3. **Vercel env vars:** `SUPABASE_SERVICE_ROLE_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+   `TOKEN_ENC_KEY`, `CRON_SECRET` (see `.env.local.example`). Redeploy.
+4. In the app: **Google Reviews → Sources & quarters → Connect Google account**, sign in
+   with the account that manages the profiles, tick the profiles to use, set short report
+   labels, **Save selection** (runs the initial backfill).
+
+### Data model
+- `gbp_connections` — encrypted refresh token per practice (no RLS policies; service role only)
+- `gbp_locations` — discovered profiles, `selected`, `site_label`
+- `gbp_reviews` — one row per review; reviewer names/photos are not stored; `quarter` is generated
+- `gbp_review_buckets` (view) — practice × quarter × profile counts, rating, unreplied
+- `review_uploads` / `review_theme_scores` gain `scope` (`all` = combined, or a location id); `review_uploads` gains `source` (`manual` | `gbp`)
+
+### Routes
+`/api/gbp/connect`, `/api/gbp/callback`, `/api/gbp/locations` (list/refresh/update/disconnect),
+`/api/gbp/sync` (manual, `full` option), `/api/gbp/cron` (weekly), `/api/gbp/buckets`.
+`/api/reviews/analyse` accepts `{ source: 'gbp', period, scope }` to code a stored bucket.
+
+---
+
+## Review replies (AHPRA / privacy-checked, human-approved) — added Oct 2026
+
+**Google Reviews → Replies.** For unreplied reviews inside the draft window (default 90 days)
+the app drafts a reply with Claude, runs a deterministic compliance check, and falls back to a
+standard template if the draft breaks any rule. Nothing is posted until an admin clicks
+**Approve & post**; the check runs again on the final (possibly edited) text and hard-blocks on any flag.
+The weekly cron drafts up to 8 new reviews per run when "auto draft" is on.
+
+Rules enforced (`src/lib/replies.ts`): no clinical/treatment/cost terms; nothing implying a patient
+relationship ("your visit", "experience", "we have no record"…); no promotional or testimonial
+language or offers; no dates; no site, clinician or staff names (configurable list); no personal
+names; no repeating the reviewer's words; no links. 1–2 star reviews never get a positive reply.
+Spam/abusive/unrelated reviews are marked "Needs a decision" with no draft.
+
+Setup: run `supabase/migrations/20261011_gbp_review_replies.sql`, then in **Replies → Settings**
+add the contact phone/email, sign-off and clinician/staff names.
+Each reply row keeps the model's raw text, the flags, who approved it, when, and what was posted (`history`).

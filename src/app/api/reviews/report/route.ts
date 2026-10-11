@@ -19,7 +19,8 @@ export async function POST(req: NextRequest) {
     if (!profile) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const body = await req.json()
-    const { periods, practiceId } = body as { periods: string[]; practiceId?: string }
+    const { periods, practiceId } = body as { periods: string[]; practiceId?: string; scope?: string }
+    const scope: string = body.scope || 'all'
 
     const targetPracticeId = (profile.role === 'superadmin' && practiceId)
       ? practiceId
@@ -32,6 +33,7 @@ export async function POST(req: NextRequest) {
       .from('review_uploads')
       .select('period, review_count, avg_rating, positive_reviews, negative_reviews, net_sentiment, summary')
       .eq('practice_id', targetPracticeId)
+      .eq('scope', scope)
       .in('period', periods)
       .order('period')
 
@@ -39,6 +41,7 @@ export async function POST(req: NextRequest) {
       .from('review_theme_scores')
       .select('period, theme_code, positive_count, negative_count, net_sentiment, representative_quote')
       .eq('practice_id', targetPracticeId)
+      .eq('scope', scope)
       .in('period', periods)
       .order('period')
 
@@ -64,7 +67,11 @@ export async function POST(req: NextRequest) {
     const sortedPeriods = [...periods].sort()
     const latestPeriod = sortedPeriods[sortedPeriods.length - 1]
     const latestUpload = uploads?.find(u => u.period === latestPeriod)
-    const practiceName = practice?.name ?? 'Practice'
+    let practiceName = practice?.name ?? 'Practice'
+    if (scope !== 'all') {
+      const { data: loc } = await supabase.from('gbp_locations').select('title, site_label').eq('id', scope).maybeSingle()
+      if (loc) practiceName = `${practiceName} — ${loc.site_label || loc.title}`
+    }
     const generatedDate = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
 
     function netColor(net: number): string {
