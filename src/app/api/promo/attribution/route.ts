@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/auth'
+import { fetchAll } from '@/lib/fetchAll'
 
 function dateToQuarter(dateStr: string): string {
   const d = new Date(dateStr)
@@ -44,10 +45,14 @@ export async function POST(req: NextRequest) {
       .order('date', { ascending: false })
 
     // Fetch all referral rows
-    const { data: referralRows } = await supabase
-      .from('referrer_rows')
-      .select('period, practice, referrals, income')
-      .eq('practice_id', targetPracticeId)
+    const referralRows = await fetchAll<{ period: string; practice: string; referrals: number; income: number }>(
+      (from, to) => supabase
+        .from('referrer_rows')
+        .select('period, practice, referrals, income')
+        .eq('practice_id', targetPracticeId)
+        .order('id')
+        .range(from, to),
+    )
 
     // Build referral lookup: practice name → period → { refs, income }
     const refLookup: Record<string, Record<string, { refs: number; income: number }>> = {}

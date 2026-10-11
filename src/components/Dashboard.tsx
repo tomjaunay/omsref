@@ -3,6 +3,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import AskClaude from './AskClaude'
 import ReviewsTab from './ReviewsTab'
+import GentuPullCard from './GentuPullCard'
+import ScrollX, { stickyCol } from './ScrollX'
 import PromoTab from './PromoTab'
 import Sparkline from './Sparkline'
 import ChangePill from './ChangePill'
@@ -100,6 +102,7 @@ function UploadTab({
 
   return (
     <div style={{ maxWidth: 520 }}>
+      <GentuPullCard practiceId={practiceId} />
       <div style={{ marginBottom: 22 }}>
         <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 5 }}>Upload quarterly report</div>
         <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6 }}>
@@ -498,12 +501,12 @@ const fetchData = useCallback(async () => {
                       placeholder="Search practice…"
                       style={{ marginBottom: 12, padding: '7px 12px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 7, width: 280, background: 'var(--surface)', color: 'var(--text)' }}
                     />
-                    <div style={{ overflowX: 'auto' }}>
+                    <ScrollX resetKey={'p:' + sortedSelected.join(',')}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                         <thead>
                           <tr>
-                            <th style={S.th}>#</th>
-                            <th style={S.th}>Practice</th>
+                            <th style={{ ...S.th, ...stickyCol(0, 40) }}>#</th>
+                            <th style={{ ...S.th, ...stickyCol(40, 200) }}>Practice</th>
                             {sortedSelected.map(p => (
                               <th key={p} style={{ ...S.th, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{p}</th>
                             ))}
@@ -521,9 +524,11 @@ const fetchData = useCallback(async () => {
                             return (
                               <tr key={p.practice} style={{ borderBottom: '1px solid var(--divider)' }}
                                 onMouseEnter={e => Array.from(e.currentTarget.cells).forEach(c => (c.style.background = '#f2f1ee'))}
-                                onMouseLeave={e => Array.from(e.currentTarget.cells).forEach(c => (c.style.background = ''))}>
-                                <td style={{ ...S.td, color: 'var(--muted)', fontSize: 11 }}>{i + 1}</td>
-                                <td style={{ ...S.td, fontWeight: 500, maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.practice}</td>
+                                onMouseLeave={e => Array.from(e.currentTarget.cells).forEach(c => (c.style.background = c.dataset.sticky ? 'var(--bg)' : ''))}>
+                                <td data-sticky="1" style={{ ...S.td, ...stickyCol(0, 40), color: 'var(--muted)', fontSize: 11 }}>{i + 1}</td>
+                                <td data-sticky="1" style={{ ...S.td, ...stickyCol(40, 200), fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={p.practice || '(no practice recorded)'}>
+                                  {p.practice || <span style={{ color: 'var(--muted)', fontWeight: 400, fontStyle: 'italic' }}>(no practice recorded)</span>}
+                                </td>
                                 {vals.map((v, vi) => (
                                   <td key={vi} style={{ ...S.tdNum, color: v === 0 ? 'var(--muted)' : 'var(--text)' }}>{metricFmt(metric, v)}</td>
                                 ))}
@@ -539,7 +544,7 @@ const fetchData = useCallback(async () => {
                           })}
                         </tbody>
                       </table>
-                    </div>
+                    </ScrollX>
                   </div>
                 )}
 
@@ -552,7 +557,7 @@ const fetchData = useCallback(async () => {
                       placeholder="Search dentist or practice…"
                       style={{ marginBottom: 12, padding: '7px 12px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 7, width: 280, background: 'var(--surface)', color: 'var(--text)' }}
                     />
-                    <div style={{ overflowX: 'auto' }}>
+                    <ScrollX resetKey={'d:' + sortedSelected.join(',')}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, tableLayout: 'fixed' }}>
                         <colgroup>
                           <col style={{ width: 40 }} />
@@ -566,9 +571,9 @@ const fetchData = useCallback(async () => {
                         </colgroup>
                         <thead>
                           <tr>
-                            <th style={S.th}>#</th>
-                            <th style={S.th}>Dentist</th>
-                            <th style={S.th}>Practice</th>
+                            <th style={{ ...S.th, ...stickyCol(0, 40) }}>#</th>
+                            <th style={{ ...S.th, ...stickyCol(40, 180) }}>Dentist</th>
+                            <th style={{ ...S.th, ...stickyCol(220, 150) }}>Practice</th>
                             {sortedSelected.map(p => (
                               <th key={p} style={{ ...S.th, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{p}</th>
                             ))}
@@ -587,15 +592,15 @@ const fetchData = useCallback(async () => {
                             return (
                               <tr key={`${d.referrer}||${d.practice}`} style={{ borderBottom: '1px solid var(--divider)' }}
                                 onMouseEnter={e => Array.from(e.currentTarget.cells).forEach(c => (c.style.background = '#f2f1ee'))}
-                                onMouseLeave={e => Array.from(e.currentTarget.cells).forEach(c => (c.style.background = ''))}>
-                                <td style={{ ...S.td, color: 'var(--muted)', fontSize: 11 }}>{i + 1}</td>
-                                <td style={{ ...S.td, fontWeight: 500, whiteSpace: 'nowrap', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                onMouseLeave={e => Array.from(e.currentTarget.cells).forEach(c => (c.style.background = c.dataset.sticky ? 'var(--bg)' : ''))}>
+                                <td data-sticky="1" style={{ ...S.td, ...stickyCol(0, 40), color: 'var(--muted)', fontSize: 11 }}>{i + 1}</td>
+                                <td data-sticky="1" style={{ ...S.td, ...stickyCol(40, 180), fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                   {d.referrer}
                                   {isOrtho && (
                                     <span style={{ marginLeft: 6, fontSize: 10, background: 'var(--amber-l)', color: 'var(--amber)', padding: '1px 5px', borderRadius: 4, fontWeight: 500 }}>Ortho</span>
                                   )}
                                 </td>
-                                <td style={{ ...S.td, color: 'var(--muted)', fontSize: 12, maxWidth: 150, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.practice}</td>
+                                <td data-sticky="1" style={{ ...S.td, ...stickyCol(220, 150), color: 'var(--muted)', fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.practice}</td>
                                 {vals.map((v, vi) => (
                                   <td key={vi} style={{ ...S.tdNum, color: v === 0 ? 'var(--muted)' : 'var(--text)' }}>{metricFmt(metric, v)}</td>
                                 ))}
@@ -611,7 +616,7 @@ const fetchData = useCallback(async () => {
                           })}
                         </tbody>
                       </table>
-                    </div>
+                    </ScrollX>
                   </div>
                 )}
               </>

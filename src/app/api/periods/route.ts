@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/auth'
 import { sortPeriods } from '@/lib/data'
+import { fetchAll } from '@/lib/fetchAll'
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,12 +29,15 @@ export async function POST(req: NextRequest) {
       .eq('id', practiceId)
       .single()
 
-    const { data: rows, error } = await supabase
-      .from('referrer_rows')
-      .select('period, referrer, practice, specialty, suburb, referrals, income')
-      .eq('practice_id', practiceId)
-
-    if (error) throw error
+    // Paged: a single select is capped at 1000 rows, which silently cut off older/newer quarters
+    const rows = await fetchAll<{ period: string; referrer: string; practice: string; specialty: string; suburb: string; referrals: number; income: number }>(
+      (from, to) => supabase
+        .from('referrer_rows')
+        .select('period, referrer, practice, specialty, suburb, referrals, income')
+        .eq('practice_id', practiceId)
+        .order('id')
+        .range(from, to),
+    )
 
     const db: Record<string, typeof rows> = {}
     for (const row of rows ?? []) {
