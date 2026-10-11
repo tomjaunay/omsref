@@ -1,6 +1,8 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Sparkline from './Sparkline'
+import ReviewSources, { locLabel, type GbpLocation } from './ReviewSources'
+import ReviewReplies from './ReviewReplies'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ThemeScore {
@@ -355,7 +357,10 @@ export default function ReviewsTab({ practiceId }: ReviewsTabProps) {
   const [themes, setThemes] = useState<ThemeDef[]>([])
   const [uploads, setUploads] = useState<UploadRecord[]>([])
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<'trends' | 'upload' | 'manage'>('trends')
+  const [view, setView] = useState<'trends' | 'sources' | 'replies' | 'upload' | 'manage'>('trends')
+  // Report scope: 'all' = combined, or a Google Business Profile location id
+  const [scope, setScope] = useState<string>('all')
+  const [gbpLocations, setGbpLocations] = useState<GbpLocation[]>([])
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>([])
   const [hoveredTheme, setHoveredTheme] = useState<string | null>(null)
   const [showCodebook, setShowCodebook] = useState(false)
@@ -381,7 +386,7 @@ export default function ReviewsTab({ practiceId }: ReviewsTabProps) {
       const res = await fetch('/api/reviews/scores', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ practiceId }),
+        body: JSON.stringify({ practiceId, scope }),
       })
       const data = await res.json()
       setScores(data.scores ?? [])
@@ -391,9 +396,30 @@ export default function ReviewsTab({ practiceId }: ReviewsTabProps) {
       setSelectedPeriods(periods)
     } catch (e) { console.error(e) }
     setLoading(false)
-  }, [practiceId])
+  }, [practiceId, scope])
 
   useEffect(() => { fetchScores() }, [fetchScores])
+
+  // Selected Google Business Profiles, for the scope selector
+  const fetchLocations = useCallback(async () => {
+    try {
+      const res = await fetch('/api/gbp/locations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'list', practiceId }),
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      setGbpLocations((data.locations ?? []).filter((l: GbpLocation) => l.selected))
+    } catch {}
+  }, [practiceId])
+
+  useEffect(() => { fetchLocations() }, [fetchLocations])
+
+  // Back from Google sign-in → open the Sources view
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('gbp')) setView('sources')
+  }, [])
 
   // Clipboard paste listener for screenshots
   useEffect(() => {
@@ -514,7 +540,7 @@ export default function ReviewsTab({ practiceId }: ReviewsTabProps) {
     await fetch('/api/reviews/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ period, practiceId }),
+      body: JSON.stringify({ period, practiceId, scope }),
     })
     await fetchScores()
   }
@@ -523,7 +549,7 @@ async function generateReport() {
   const res = await fetch('/api/reviews/report', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ periods: sortedSelected, practiceId }),
+    body: JSON.stringify({ periods: sortedSelected, practiceId, scope }),
   })
   if (!res.ok) { alert('Failed to generate report'); return }
   const html = await res.text()
@@ -562,7 +588,7 @@ async function generateReport() {
       {/* Sub-nav */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 8 }}>
         <div style={{ display: 'flex', gap: 4 }}>
-          {(['trends', 'upload', 'manage'] as const).map(v => (
+          {(['trends', 'sources', 'replies', 'upload', 'manage'] as const).map(v => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -575,7 +601,7 @@ async function generateReport() {
                 boxShadow: view === v ? '0 1px 3px rgba(0,0,0,.06)' : 'none',
               }}
             >
-              {v === 'trends' ? 'Theme trends' : v === 'upload' ? '+ Upload reviews' : 'Manage'}
+              {v === 'trends' ? 'Theme trends' : v === 'sources' ? 'Sources & quarters' : v === 'replies' ? 'Replies' : v === 'upload' ? '+ Upload reviews' : 'Manage'}
             </button>
           ))}
           <button
@@ -599,6 +625,17 @@ async function generateReport() {
   </button>
 )}
         </div>
+
+        {view === 'trends' && gbpLocations.length > 0 && (
+          <select
+            value={scope}
+            onChange={e => setScope(e.target.value)}
+            style={{ padding: '4px 8px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text)' }}
+          >
+            <option value="all">All profiles (combined)</option>
+            {gbpLocations.map(l => <option key={l.id} value={l.id}>{locLabel(l)}</option>)}
+          </select>
+        )}
 
         {view === 'trends' && allPeriods.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -635,6 +672,14 @@ async function generateReport() {
           </div>
         )}
       </div>
+
+      {/* ── SOURCES & QUARTERLY BUCKETS ── */}
+      {view === 'sources' && (
+        <ReviewSources practiceId={practiceId} onAnalysed={() => { fetchScores(); fetchLocations() }} />
+      )}
+
+      {/* ── REPLIES ── */}
+      {view === 'replies' && <ReviewReplies practiceId={practiceId} />}
 
       {/* ── TRENDS ── */}
       {view === 'trends' && (

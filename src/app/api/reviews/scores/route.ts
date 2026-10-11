@@ -19,20 +19,23 @@ export async function POST(req: NextRequest) {
     const practiceId = (profile.role === 'superadmin' && body.practiceId)
       ? body.practiceId
       : profile.practice_id
+    const scope: string = body.scope || 'all'
 
     // Fetch scores
     const { data: scores, error: scoresError } = await supabase
       .from('review_theme_scores')
       .select('*')
       .eq('practice_id', practiceId)
+      .eq('scope', scope)
       .order('period')
     if (scoresError) throw scoresError
 
     // Fetch uploads
     const { data: uploads } = await supabase
       .from('review_uploads')
-      .select('period, review_count, uploaded_at, avg_rating, positive_reviews, negative_reviews, net_sentiment, summary')
+      .select('period, scope, source, review_count, uploaded_at, avg_rating, positive_reviews, negative_reviews, net_sentiment, summary')
       .eq('practice_id', practiceId)
+      .eq('scope', scope)
       .order('period')
 
     // Fetch global themes separately

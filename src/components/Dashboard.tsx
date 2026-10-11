@@ -245,6 +245,10 @@ export default function Dashboard({ practiceId: practiceIdOverride }: DashboardP
   const [practiceName, setPracticeName] = useState<string>('')
 
 const [mainTab, setMainTab] = useState<'dashboard' | 'upload' | 'manage' | 'reviews' | 'promo'>('dashboard')
+  // Return to the Google Reviews tab after the Google Business Profile OAuth redirect
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('tab') === 'reviews') setMainTab('reviews')
+  }, [])
   const [dashTab, setDashTab] = useState<DashTab>('practices')
   const [metric, setMetric] = useState<Metric>('refs')
 

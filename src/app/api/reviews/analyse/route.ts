@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/auth'
+import { serviceSupabase } from '@/lib/gbp'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -21,15 +22,52 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { reviews, period, practiceId } = body as {
-      reviews: Array<{ text: string; rating: number; date: string }>
+    const { period, practiceId } = body as {
+      reviews?: Array<{ text: string; rating: number; date: string }>
       period: string
       practiceId?: string
+      source?: 'manual' | 'gbp'
+      scope?: string  // 'all' or a gbp_locations.id
     }
+    const source = body.source === 'gbp' ? 'gbp' : 'manual'
+    const scope: string = body.scope || 'all'
+    let reviews: Array<{ text: string; rating: number; date: string }> = body.reviews ?? []
 
     const targetPracticeId = (profile.role === 'superadmin' && practiceId)
       ? practiceId
       : profile.practice_id
+
+    // Stored Google Business Profile reviews: load the quarter bucket for this scope
+    let storedOverall: { avg_rating: number; total_reviews: number } | null = null
+    if (source === 'gbp') {
+      const db = serviceSupabase()
+      let locationIds: string[]
+      if (scope === 'all') {
+        const { data: locs } = await db.from('gbp_locations').select('id')
+          .eq('practice_id', targetPracticeId).eq('selected', true)
+        locationIds = (locs ?? []).map(l => l.id)
+      } else {
+        locationIds = [scope]
+      }
+      if (!locationIds.length) return NextResponse.json({ error: 'No business profiles selected' }, { status: 400 })
+
+      const { data: stored, error: storedErr } = await db.from('gbp_reviews')
+        .select('star_rating, comment, create_time')
+        .eq('practice_id', targetPracticeId).eq('quarter', period).in('location_id', locationIds)
+        .order('create_time')
+      if (storedErr) throw storedErr
+      const all = stored ?? []
+      if (!all.length) return NextResponse.json({ error: `No reviews stored for ${period}` }, { status: 400 })
+      storedOverall = {
+        avg_rating: Math.round((all.reduce((a, r) => a + r.star_rating, 0) / all.length) * 10) / 10,
+        total_reviews: all.length,
+      }
+      reviews = all
+        .filter(r => (r.comment ?? '').trim())
+        .map(r => ({ text: r.comment as string, rating: r.star_rating, date: String(r.create_time).slice(0, 10) }))
+      if (!reviews.length) return NextResponse.json({ error: `${period} has ${all.length} star-only review(s) and no written reviews to code` }, { status: 400 })
+    }
+    if (!reviews.length) return NextResponse.json({ error: 'No reviews provided' }, { status: 400 })
 
     // Fetch global themes
     const { data: globalThemes } = await supabase
@@ -144,6 +182,10 @@ Return exactly this JSON structure:
 
     const clean = rawText.replace(/```json|```/g, '').trim()
     const result = JSON.parse(clean)
+    // For stored reviews, star-only reviews count toward the rating but are not coded
+    if (storedOverall) {
+      result.overall = { ...(result.overall ?? {}), avg_rating: storedOverall.avg_rating, total_reviews: storedOverall.total_reviews, coded_reviews: reviews.length }
+    }
 
     // Build scores array
     const scores = Object.entries(result.themes).map(([code, data]) => {
@@ -157,6 +199,7 @@ Return exactly this JSON structure:
       return {
         practice_id: targetPracticeId,
         period,
+        scope,
         theme_code: code,
         positive_count: d.positive_count ?? 0,
         negative_count: d.negative_count ?? 0,
@@ -172,6 +215,7 @@ Return exactly this JSON structure:
       .delete()
       .eq('practice_id', targetPracticeId)
       .eq('period', period)
+      .eq('scope', scope)
 
     const { error: insertError } = await supabase
       .from('review_theme_scores')
@@ -184,19 +228,23 @@ Return exactly this JSON structure:
       .upsert({
         practice_id: targetPracticeId,
         period,
-        review_count: reviews.length,
+        scope,
+        source,
+        review_count: storedOverall?.total_reviews ?? reviews.length,
         uploaded_by: user.id,
         avg_rating: result.overall?.avg_rating ?? null,
         positive_reviews: result.overall?.positive_reviews ?? 0,
         negative_reviews: result.overall?.negative_reviews ?? 0,
         net_sentiment: result.overall?.net_sentiment ?? 0,
         summary: result.summary ?? null,
-      }, { onConflict: 'practice_id,period' })
+      }, { onConflict: 'practice_id,period,scope' })
 
     return NextResponse.json({
       ok: true,
       period,
-      reviewCount: reviews.length,
+      scope,
+      reviewCount: storedOverall?.total_reviews ?? reviews.length,
+      codedCount: reviews.length,
       summary: result.summary,
       overall: result.overall,
       themes: result.themes,
