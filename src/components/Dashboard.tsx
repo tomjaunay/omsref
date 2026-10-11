@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import AskClaude from './AskClaude'
 import ReviewsTab from './ReviewsTab'
+import GentuPullCard from './GentuPullCard'
 import PromoTab from './PromoTab'
 import Sparkline from './Sparkline'
 import ChangePill from './ChangePill'
@@ -100,6 +101,7 @@ function UploadTab({
 
   return (
     <div style={{ maxWidth: 520 }}>
+      <GentuPullCard practiceId={practiceId} />
       <div style={{ marginBottom: 22 }}>
         <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 5 }}>Upload quarterly report</div>
         <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6 }}>
