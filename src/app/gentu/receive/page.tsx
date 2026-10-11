@@ -22,6 +22,12 @@ export default function GentuReceive() {
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [practiceId, setPracticeId] = useState<string | undefined>()
   const [notGentu, setNotGentu] = useState(false)
+  // Full rebuild: one CSV per quarter
+  const [batch, setBatch] = useState<Record<string, { csv?: string; error?: string }>>({})
+  const [batchTotal, setBatchTotal] = useState(0)
+  const [batchDone, setBatchDone] = useState(false)
+  const [batchSaving, setBatchSaving] = useState<string | null>(null)
+  const [batchSaved, setBatchSaved] = useState<Record<string, string>>({})
 
   useEffect(() => {
     const p = new URLSearchParams(window.location.search)
@@ -31,8 +37,15 @@ export default function GentuReceive() {
     const onMsg = (e: MessageEvent) => {
       if (!GENTU_ORIGIN.test(e.origin)) return
       const d = e.data as GentuCsvMessage
-      if (!d || d.type !== 'omsref-gentu-csv' || typeof d.csv !== 'string') return
-      setCsv(d.csv); setHow(`from Gentu (${d.how})`); setMsg(null); setNotGentu(false)
+      if (!d || d.type !== 'omsref-gentu-csv') return
+      setNotGentu(false)
+      if (d.batchStart) { setBatch({}); setBatchTotal(d.batchStart); setBatchDone(false); setBatchSaved({}); setCsv(null); setMsg(null); return }
+      if (d.batchItem) { const q = d.batchItem; setBatch(b => ({ ...b, [q]: { csv: d.csv, error: d.error } })); return }
+      if (d.batchDone) { setBatchDone(true); return }
+      if (typeof d.csv !== 'string') return
+      setCsv(d.csv); setMsg(null)
+      setHow(`from Gentu${d.range ? ` (${d.range[0]} – ${d.range[1]})` : ''}`)
+      if (d.period) setPeriod(d.period)
     }
     window.addEventListener('message', onMsg)
     return () => window.removeEventListener('message', onMsg)
@@ -78,6 +91,40 @@ export default function GentuReceive() {
     setSaving(false)
   }
 
+  const batchRows = Object.keys(batch).sort().map(q => {
+    const it = batch[q]
+    const r = it.csv ? parseGentuCSV(it.csv) : null
+    return {
+      q, error: it.error, rows: r,
+      referrers: r?.length ?? 0,
+      referrals: r?.reduce((s, x) => s + x.referrals, 0) ?? 0,
+      income: r?.reduce((s, x) => s + x.income, 0) ?? 0,
+    }
+  })
+  const saveable = batchRows.filter(r => r.rows && r.rows.length)
+
+  async function saveAll() {
+    const replacingN = saveable.filter(r => existing.includes(r.q)).length
+    if (!confirm(`Save ${saveable.length} quarters from Gentu?${replacingN ? ` ${replacingN} existing quarter(s) will be replaced.` : ''} Quarters not in this pull are left as they are.`)) return
+    setMsg(null)
+    let ok = 0
+    for (const r of saveable) {
+      setBatchSaving(r.q)
+      try {
+        const res = await fetch('/api/upload', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ period: r.q, csvText: batch[r.q].csv, practiceId }),
+        })
+        const d = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(d.error ?? `HTTP ${res.status}`)
+        setBatchSaved(s => ({ ...s, [r.q]: 'saved' })); ok++
+      } catch (e) { setBatchSaved(s => ({ ...s, [r.q]: `failed: ${(e as Error).message}` })) }
+    }
+    setBatchSaving(null)
+    setExisting(e => [...new Set([...e, ...saveable.map(r => r.q)])])
+    setMsg({ type: ok === saveable.length ? 'success' : 'error', text: `${ok} of ${saveable.length} quarters saved. Reload omsref to see them.` })
+  }
+
   function onDrop(f: File | undefined) {
     if (!f) return
     f.text().then(t => { setCsv(t); setHow(`from file ${f.name}`); setMsg(null) })
@@ -89,8 +136,8 @@ export default function GentuReceive() {
     <main style={{ maxWidth: 520, margin: '24px auto', padding: '0 16px', fontSize: 14, lineHeight: 1.5 }}>
       <h1 style={{ fontSize: 18, margin: '0 0 4px' }}>Pull from Gentu</h1>
       <div style={{ color: 'var(--muted, #777)', fontSize: 13, marginBottom: 16 }}>
-        Keep this window open. In the Gentu tab, run <b>Reports → Referral Report → Referrer Details</b> for one quarter and click export.
-        The CSV arrives here automatically.
+        Keep this window open. In the Gentu tab, run <b>Reports → Referral Report → Referrer Details</b> and click export.
+        The CSV arrives here automatically. To rebuild every quarter, click <b>Pull every quarter</b> on the note in Gentu after the first export.
       </div>
 
       {notGentu && (
@@ -99,7 +146,39 @@ export default function GentuReceive() {
         </div>
       )}
 
-      {!csv && (
+      {batchTotal > 0 && (
+        <div style={box}>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Full rebuild from Gentu</div>
+          <div style={{ fontSize: 12, color: 'var(--muted, #777)', marginBottom: 10 }}>
+            {batchDone ? `Received ${batchRows.length} of ${batchTotal} quarters.` : `Receiving… ${batchRows.length} of ${batchTotal} quarters`}
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead><tr>{['Quarter', 'Referrers', 'Referrals', 'Income', ''].map(h => <th key={h} style={{ textAlign: h === 'Quarter' || h === '' ? 'left' : 'right', padding: '4px 6px', color: 'var(--muted, #777)', fontWeight: 500, borderBottom: '1px solid var(--border, #e2e0db)' }}>{h}</th>)}</tr></thead>
+            <tbody>
+              {batchRows.map(r => (
+                <tr key={r.q}>
+                  <td style={{ padding: '4px 6px', fontFamily: 'monospace' }}>{r.q}</td>
+                  <td style={{ padding: '4px 6px', textAlign: 'right' }}>{r.rows ? r.referrers : '—'}</td>
+                  <td style={{ padding: '4px 6px', textAlign: 'right' }}>{r.rows ? r.referrals : '—'}</td>
+                  <td style={{ padding: '4px 6px', textAlign: 'right' }}>{r.rows ? fmt$(r.income) : '—'}</td>
+                  <td style={{ padding: '4px 6px', color: r.error || batchSaved[r.q]?.startsWith('failed') ? '#8a2020' : 'var(--muted, #777)' }}>
+                    {batchSaving === r.q ? 'saving…' : batchSaved[r.q] ?? (r.error ? r.error : !r.rows ? 'empty — skipped' : existing.includes(r.q) ? 'replaces existing' : 'new')}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <button onClick={saveAll} disabled={!batchDone || !saveable.length || !!batchSaving}
+            style={{ marginTop: 12, width: '100%', padding: 10, fontWeight: 600, border: 'none', borderRadius: 8, cursor: 'pointer', background: 'var(--accent, #1a6b3c)', color: '#fff', opacity: !batchDone || !saveable.length || batchSaving ? 0.6 : 1 }}>
+            {batchSaving ? `Saving ${batchSaving}…` : `Save all ${saveable.length} quarters`}
+          </button>
+          <div style={{ fontSize: 11, color: 'var(--muted, #777)', marginTop: 6 }}>
+            Quarters before Gentu (pre Sept 2022) aren&apos;t touched. Check a couple of totals against quarters you already have before saving.
+          </div>
+        </div>
+      )}
+
+      {!csv && batchTotal === 0 && (
         <div
           style={{ ...box, border: '2px dashed var(--border, #ccc)', textAlign: 'center', color: 'var(--muted, #777)' }}
           onDragOver={e => e.preventDefault()}

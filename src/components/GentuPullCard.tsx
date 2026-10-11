@@ -48,6 +48,7 @@ export default function GentuPullCard({ practiceId, onFocusBack }: { practiceId?
             <li>Open Gentu and log in. Click the bookmark: a small omsref window opens and Gentu shows a “watching for the export” note.</li>
             <li>Run <b>Reports → Referral Report → Referrer Details</b> for one quarter and export the CSV as usual.</li>
             <li>Check the quarter and totals in the omsref window, then click <b>Save</b>.</li>
+            <li><b>Full rebuild:</b> after that first export, click <b>Pull every quarter</b> on the Gentu note. It re-runs the same report for each quarter from Sept 2022 to the last complete quarter; review the list and click <b>Save all</b>. (Only possible when Gentu builds the export on its server; the note tells you if not.)</li>
           </ol>
           Only the export file is captured; nothing else on the Gentu page is read, and the report is already totalled per referrer.
           Allow pop-ups for Gentu if the window doesn’t open. If the bookmark won’t run, paste this into the DevTools console (F12 → Console) on the Gentu tab instead:
